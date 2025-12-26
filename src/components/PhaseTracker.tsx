@@ -1,6 +1,7 @@
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { Calendar, Gift, Timer } from "lucide-react";
-import { useCountdown, getPhaseEndDate } from "@/hooks/useCountdown";
+import { useCountdown } from "@/hooks/useCountdown";
 
 interface PhaseTrackerProps {
   currentPhase: number;
@@ -15,12 +16,15 @@ const PhaseTracker = ({
   totalRewards,
   tokenSymbol,
 }: PhaseTrackerProps) => {
-  // Calculate phase end date based on days remaining
-  const daysPlayed = 7 - daysRemaining;
-  const phaseStartDate = new Date();
-  phaseStartDate.setDate(phaseStartDate.getDate() - daysPlayed);
+  // Memoize the phase end date to prevent recalculation on every render
+  const phaseEndDate = useMemo(() => {
+    const now = new Date();
+    const endDate = new Date(now);
+    endDate.setDate(endDate.getDate() + daysRemaining);
+    endDate.setHours(23, 59, 59, 999);
+    return endDate;
+  }, [daysRemaining]);
   
-  const phaseEndDate = getPhaseEndDate(phaseStartDate, daysPlayed);
   const { days, hours, minutes, isEnded } = useCountdown(phaseEndDate);
 
   const progressPercentage = ((7 - daysRemaining) / 7) * 100;
