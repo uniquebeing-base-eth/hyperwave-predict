@@ -2,13 +2,14 @@ import { motion } from "framer-motion";
 import UserStats from "@/components/UserStats";
 
 interface StatsPageProps {
-  balance: number;
+  ethBalance: number;
+  bloomBalance: number;
   totalBets: number;
   wins: number;
   streak: number;
 }
 
-const StatsPage = ({ balance, totalBets, wins, streak }: StatsPageProps) => {
+const StatsPage = ({ ethBalance, bloomBalance, totalBets, wins, streak }: StatsPageProps) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -30,7 +31,8 @@ const StatsPage = ({ balance, totalBets, wins, streak }: StatsPageProps) => {
       </motion.div>
 
       <UserStats
-        balance={balance}
+        ethBalance={ethBalance}
+        bloomBalance={bloomBalance}
         totalBets={totalBets}
         wins={wins}
         streak={streak}

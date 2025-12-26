@@ -1,24 +1,33 @@
 import { motion } from "framer-motion";
-import { Wallet, Trophy, Target, Flame } from "lucide-react";
+import { Wallet, Trophy, Target, Flame, Coins } from "lucide-react";
 
 interface UserStatsProps {
-  balance: number;
+  ethBalance: number;
+  bloomBalance: number;
   totalBets: number;
   wins: number;
   streak: number;
 }
 
-const UserStats = ({ balance, totalBets, wins, streak }: UserStatsProps) => {
+const UserStats = ({ ethBalance, bloomBalance, totalBets, wins, streak }: UserStatsProps) => {
   const winRate = totalBets > 0 ? Math.round((wins / totalBets) * 100) : 0;
 
   const stats = [
     {
       icon: Wallet,
-      label: "Balance",
-      value: balance.toLocaleString(),
+      label: "ETH Balance",
+      value: ethBalance.toFixed(6),
       suffix: "ETH",
       color: "text-primary",
       glow: "text-glow-primary",
+    },
+    {
+      icon: Coins,
+      label: "BLOOM Balance",
+      value: bloomBalance.toLocaleString(),
+      suffix: "$BLOOM",
+      color: "text-accent",
+      glow: "text-glow-accent",
     },
     {
       icon: Trophy,

@@ -6,7 +6,7 @@ import RewardsPage from "@/pages/RewardsPage";
 import StatsPage from "@/pages/StatsPage";
 import RoundResult from "@/components/RoundResult";
 import { useMiniAppPrompt } from "@/hooks/useMiniAppPrompt";
-import { useWalletBalances } from "@/hooks/useWalletBalances";
+import { useNeynarBalances } from "@/hooks/useNeynarBalances";
 import { GamePhase } from "@/components/GameTimer";
 
 interface Bet {
@@ -23,9 +23,10 @@ const Index = () => {
   // Initialize mini app prompt
   useMiniAppPrompt();
   
-  // Wallet balances
-  const { bloomBalance, isConnected } = useWalletBalances();
+  // Wallet balances via Neynar
+  const { ethBalance, bloomBalance } = useNeynarBalances();
   const bloomBalanceNum = parseFloat(bloomBalance.replace(/,/g, '')) || 0;
+  const ethBalanceNum = parseFloat(ethBalance) || 0;
   
   // Game state
   const [currentPhase, setCurrentPhase] = useState<GamePhase>("betting");
@@ -226,7 +227,8 @@ const Index = () => {
             path="stats"
             element={
               <StatsPage
-                balance={bloomBalanceNum}
+                ethBalance={ethBalanceNum}
+                bloomBalance={bloomBalanceNum}
                 totalBets={totalBets}
                 wins={wins}
                 streak={streak}

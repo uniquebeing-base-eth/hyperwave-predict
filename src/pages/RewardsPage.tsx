@@ -39,20 +39,20 @@ const RewardsPage = ({ rewards, daysPlayed = 0 }: RewardsPageProps) => {
         </p>
       </motion.div>
 
-      {/* Claimable Rewards */}
-      <RewardsTracker
-        totalRewards={rewards}
-        daysPlayed={daysPlayed}
-        canClaim={canClaim}
-        onClaim={handleClaim}
-      />
-
-      {/* Phase Progress */}
+      {/* Phase Progress - On Top */}
       <PhaseTracker
         currentPhase={1}
         daysRemaining={7 - daysPlayed}
         totalRewards={rewards}
         tokenSymbol="BLOOM"
+      />
+
+      {/* Claimable Rewards - At Bottom */}
+      <RewardsTracker
+        totalRewards={rewards}
+        daysPlayed={daysPlayed}
+        canClaim={canClaim}
+        onClaim={handleClaim}
       />
     </motion.div>
   );
