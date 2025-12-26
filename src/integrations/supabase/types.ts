@@ -14,7 +14,137 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bets: {
+        Row: {
+          amount: number
+          created_at: string
+          direction: string
+          entry_price: number
+          exit_price: number | null
+          id: string
+          payout: number | null
+          result: string | null
+          round_id: string
+          settled_at: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          direction: string
+          entry_price: number
+          exit_price?: number | null
+          id?: string
+          payout?: number | null
+          result?: string | null
+          round_id: string
+          settled_at?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          direction?: string
+          entry_price?: number
+          exit_price?: number | null
+          id?: string
+          payout?: number | null
+          result?: string | null
+          round_id?: string
+          settled_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bets_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      game_rounds: {
+        Row: {
+          down_pool: number
+          end_price: number | null
+          ended_at: string | null
+          id: string
+          result: string | null
+          round_number: number
+          start_price: number
+          started_at: string
+          total_pool: number
+          up_pool: number
+        }
+        Insert: {
+          down_pool?: number
+          end_price?: number | null
+          ended_at?: string | null
+          id?: string
+          result?: string | null
+          round_number: number
+          start_price: number
+          started_at?: string
+          total_pool?: number
+          up_pool?: number
+        }
+        Update: {
+          down_pool?: number
+          end_price?: number | null
+          ended_at?: string | null
+          id?: string
+          result?: string | null
+          round_number?: number
+          start_price?: number
+          started_at?: string
+          total_pool?: number
+          up_pool?: number
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          balance: number
+          created_at: string
+          display_name: string | null
+          id: string
+          total_bets: number
+          total_losses: number
+          total_wins: number
+          updated_at: string
+          username: string | null
+          win_rate: number
+        }
+        Insert: {
+          avatar_url?: string | null
+          balance?: number
+          created_at?: string
+          display_name?: string | null
+          id: string
+          total_bets?: number
+          total_losses?: number
+          total_wins?: number
+          updated_at?: string
+          username?: string | null
+          win_rate?: number
+        }
+        Update: {
+          avatar_url?: string | null
+          balance?: number
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          total_bets?: number
+          total_losses?: number
+          total_wins?: number
+          updated_at?: string
+          username?: string | null
+          win_rate?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

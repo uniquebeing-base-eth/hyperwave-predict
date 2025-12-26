@@ -14,26 +14,24 @@ interface Bet {
 
 interface ActionPageProps {
   balance: number;
-  currentPrice: number;
-  priceChange: number;
   upOdds: number;
   downOdds: number;
   isBettingOpen: boolean;
   recentBets: Bet[];
   onPlaceBet: (direction: "up" | "down", amount: number) => void;
   onRoundComplete: () => void;
+  onPriceUpdate?: (price: number, change: number) => void;
 }
 
 const ActionPage = ({
   balance,
-  currentPrice,
-  priceChange,
   upOdds,
   downOdds,
   isBettingOpen,
   recentBets,
   onPlaceBet,
   onRoundComplete,
+  onPriceUpdate,
 }: ActionPageProps) => {
   return (
     <motion.div
@@ -56,8 +54,8 @@ const ActionPage = ({
         </p>
       </motion.div>
 
-      {/* Chart */}
-      <PriceChart currentPrice={currentPrice} priceChange={priceChange} />
+      {/* Chart - Now with real ETH prices */}
+      <PriceChart onPriceUpdate={onPriceUpdate} />
 
       {/* Timer */}
       <div className="flex justify-center">

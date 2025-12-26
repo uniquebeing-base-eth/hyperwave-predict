@@ -18,6 +18,7 @@ interface Bet {
 const Index = () => {
   // Initialize mini app prompt
   useMiniAppPrompt();
+  
   // User state
   const [balance, setBalance] = useState(1000);
   const [totalBets, setTotalBets] = useState(0);
@@ -34,13 +35,18 @@ const Index = () => {
   const [upOdds, setUpOdds] = useState(55);
   const [downOdds, setDownOdds] = useState(45);
 
-  // Price state
-  const [currentPrice] = useState(3456.78);
-  const [priceChange, setPriceChange] = useState(0.0234);
+  // Price state from real ETH data
+  const [currentPrice, setCurrentPrice] = useState(0);
+  const [priceChange, setPriceChange] = useState(0);
 
   // Result modal
   const [showResult, setShowResult] = useState(false);
   const [roundResult, setRoundResult] = useState<"up" | "down" | "draw" | null>(null);
+
+  const handlePriceUpdate = useCallback((price: number, change: number) => {
+    setCurrentPrice(price);
+    setPriceChange(change);
+  }, []);
 
   const handlePlaceBet = (direction: "up" | "down", amount: number) => {
     if (amount > balance) return;
@@ -76,10 +82,6 @@ const Index = () => {
       const outcomes: ("up" | "down" | "draw")[] = ["up", "down", "draw"];
       const result = outcomes[Math.floor(Math.random() * 10) % 3];
       setRoundResult(result);
-
-      // Calculate change based on result
-      const change = result === "up" ? Math.random() * 0.1 : result === "down" ? -Math.random() * 0.1 : 0;
-      setPriceChange(change);
 
       if (currentBet) {
         const isWin = result === currentBet.direction;
@@ -126,14 +128,13 @@ const Index = () => {
             element={
               <ActionPage
                 balance={balance}
-                currentPrice={currentPrice}
-                priceChange={priceChange}
                 upOdds={upOdds}
                 downOdds={downOdds}
                 isBettingOpen={isBettingOpen}
                 recentBets={recentBets}
                 onPlaceBet={handlePlaceBet}
                 onRoundComplete={handleRoundComplete}
+                onPriceUpdate={handlePriceUpdate}
               />
             }
           />
