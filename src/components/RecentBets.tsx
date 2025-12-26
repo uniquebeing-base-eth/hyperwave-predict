@@ -65,7 +65,7 @@ const RecentBets = ({ bets }: RecentBetsProps) => {
                 </div>
                 <div>
                   <span className="text-sm font-medium text-foreground">
-                    {bet.amount} ETH
+                    {bet.amount.toLocaleString()} $BLOOM
                   </span>
                   <p className="text-xs text-muted-foreground">
                     {bet.direction.toUpperCase()}
