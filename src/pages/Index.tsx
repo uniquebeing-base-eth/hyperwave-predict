@@ -5,6 +5,7 @@ import ActionPage from "@/pages/ActionPage";
 import RewardsPage from "@/pages/RewardsPage";
 import StatsPage from "@/pages/StatsPage";
 import RoundResult from "@/components/RoundResult";
+import { useMiniAppPrompt } from "@/hooks/useMiniAppPrompt";
 
 interface Bet {
   id: string;
@@ -15,6 +16,8 @@ interface Bet {
 }
 
 const Index = () => {
+  // Initialize mini app prompt
+  useMiniAppPrompt();
   // User state
   const [balance, setBalance] = useState(1000);
   const [totalBets, setTotalBets] = useState(0);
