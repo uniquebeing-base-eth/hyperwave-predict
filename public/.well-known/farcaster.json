@@ -14,7 +14,7 @@
     "buttonTitle": "Launch HyperWave",
     "splashImageUrl": "https://hyperwavex.xyz/icon.png",
     "splashBackgroundColor": "#0a0a12",
-    "webhookUrl": "https://api.neynar.com/f/app/d72fc6fc-2ae5-4b1d-87ef-ff6be0f6c165/event",
+    "webhookUrl": "https://api.neynar.com/f/app/c508ca87-29d3-48b1-b2cd-5e639edb4b32/event",
     "subtitle": "Stake Predict and Win Big",
     "description": "Fast prediction market stake tokens win rewards",
     "primaryCategory": "games",
