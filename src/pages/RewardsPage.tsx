@@ -1,36 +1,58 @@
 import { motion } from "framer-motion";
 import PhaseTracker from "@/components/PhaseTracker";
+import RewardsTracker from "@/components/RewardsTracker";
+import { toast } from "sonner";
 
 interface RewardsPageProps {
   rewards: number;
+  daysPlayed?: number;
 }
 
-const RewardsPage = ({ rewards }: RewardsPageProps) => {
+const RewardsPage = ({ rewards, daysPlayed = 0 }: RewardsPageProps) => {
+  const canClaim = daysPlayed >= 7;
+
+  const handleClaim = () => {
+    if (canClaim) {
+      toast.success("Rewards claimed!", {
+        description: `You've claimed ${rewards.toLocaleString()} $BLOOM`,
+      });
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="max-w-md mx-auto space-y-6"
+      className="max-w-md mx-auto space-y-5"
     >
       <motion.div
-        className="text-center mb-8"
+        className="text-center mb-6"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        <h2 className="text-lg md:text-xl font-display uppercase tracking-widest text-muted-foreground mb-2">
+        <h2 className="text-lg font-display uppercase tracking-widest text-muted-foreground mb-1">
           Phase <span className="text-accent text-glow-accent">Rewards</span>
         </h2>
-        <p className="text-sm text-muted-foreground">
-          Track your phase progress and claim rewards.
+        <p className="text-xs text-muted-foreground">
+          Track your progress and claim rewards.
         </p>
       </motion.div>
 
+      {/* Claimable Rewards */}
+      <RewardsTracker
+        totalRewards={rewards}
+        daysPlayed={daysPlayed}
+        canClaim={canClaim}
+        onClaim={handleClaim}
+      />
+
+      {/* Phase Progress */}
       <PhaseTracker
         currentPhase={1}
-        daysRemaining={5}
+        daysRemaining={7 - daysPlayed}
         totalRewards={rewards}
-        tokenSymbol="ETH"
+        tokenSymbol="BLOOM"
       />
     </motion.div>
   );

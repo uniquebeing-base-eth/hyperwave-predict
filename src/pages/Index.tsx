@@ -218,7 +218,7 @@ const Index = () => {
               />
             }
           />
-          <Route path="rewards" element={<RewardsPage rewards={rewards} />} />
+          <Route path="rewards" element={<RewardsPage rewards={rewards} daysPlayed={streak} />} />
           <Route
             path="stats"
             element={
