@@ -4,15 +4,13 @@ import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
 
 interface MainLayoutProps {
-  balance: number;
-  isConnected: boolean;
   children: ReactNode;
 }
 
-const MainLayout = ({ balance, isConnected, children }: MainLayoutProps) => {
+const MainLayout = ({ children }: MainLayoutProps) => {
   return (
     <div className="min-h-screen bg-background bg-gradient-hero">
-      <Header balance={balance} isConnected={isConnected} />
+      <Header />
 
       {/* Decorative Background Elements */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
