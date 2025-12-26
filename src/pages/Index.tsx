@@ -153,27 +153,30 @@ const Index = () => {
     } else if (endPrice < startPrice) {
       result = "down";
     } else {
-      result = "draw";
+      result = "draw"; // Draw = loss in HyperWave
     }
     
     setRoundResult(result);
 
     if (currentBet) {
       const isWin = result === currentBet.direction;
+      // DRAWS ARE LOSSES in HyperWave! No refunds.
       const isDraw = result === "draw";
 
       setTotalBets((prev) => prev + 1);
-      setRewards((prev) => prev + 10); // Base reward for playing
+      setRewards((prev) => prev + 10); // Base reward for playing (tracked separately)
 
       if (isWin) {
         setWins((prev) => prev + 1);
+        // Winner gets 2x payout instantly (simulated - actual contract does this)
       }
+      // Losses and draws - funds stay in contract (house wins)
 
-      // Update recent bets
+      // Update recent bets - draws count as losses now
       setRecentBets((prev) =>
         prev.map((bet) =>
           bet.result === "pending"
-            ? { ...bet, result: isDraw ? "pending" : isWin ? "win" : "lose" }
+            ? { ...bet, result: isWin ? "win" : "lose" } // Draw = lose
             : bet
         )
       );
@@ -181,14 +184,14 @@ const Index = () => {
       setShowResult(true);
     }
 
-    // Reset for next round
+    // Reset for next round - instant, no delay
     setTimeout(() => {
       setCurrentBet(null);
       setUpOdds(50);
       setDownOdds(50);
       startPriceRef.current = 0;
       endPriceRef.current = 0;
-    }, 3000);
+    }, 2000); // Quick reset for HyperWave pace
   }, [currentBet, currentPrice]);
 
   // Calculate if betting is allowed

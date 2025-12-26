@@ -7,31 +7,27 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
- * @title BloomBetting
- * @dev A prediction market contract for ETH price movements using $BLOOM token
- * @notice Users stake BLOOM tokens to predict if ETH price will go UP or DOWN
+ * @title BloomBetting (HyperWave Edition)
+ * @dev House-based prediction market with fixed 2x payout
+ * @notice Users can bet unlimited times per round. Draws = losses. Instant settlement.
  */
 contract BloomBetting is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // ============ Constants ============
     IERC20 public immutable bloomToken;
-    uint256 public constant MINIMUM_STAKE = 100_000 * 10**18; // 100,000 BLOOM (assuming 18 decimals)
-    uint256 public constant BETTING_DURATION = 50 seconds; // 60s total - 10s lock
-    uint256 public constant LOCK_DURATION = 10 seconds;
-    uint256 public constant RESOLUTION_DURATION = 60 seconds;
+    address public constant BLOOM_TOKEN_ADDRESS = 0xa07e759da6b3d4d75ed76f92fbcb867b9c145b07;
+    uint256 public constant MINIMUM_STAKE = 100_000 * 10**18; // 100,000 BLOOM (18 decimals)
+    uint256 public constant ROUND_DURATION = 60; // 1 minute rounds
     
     // ============ Enums ============
     enum Direction { None, Up, Down }
-    enum RoundPhase { Betting, Locked, Resolving, Resolved }
-    enum BetResult { Pending, Win, Lose, Draw }
+    enum BetResult { Pending, Win, Lose }
 
     // ============ Structs ============
     struct Round {
         uint256 roundId;
         uint256 startTime;
-        uint256 lockTime;
-        uint256 resolutionTime;
         uint256 endTime;
         uint256 startPrice;
         uint256 endPrice;
@@ -42,6 +38,7 @@ contract BloomBetting is Ownable, ReentrancyGuard {
     }
 
     struct Bet {
+        uint256 betId;
         uint256 roundId;
         address user;
         Direction direction;
@@ -49,7 +46,6 @@ contract BloomBetting is Ownable, ReentrancyGuard {
         uint256 timestamp;
         BetResult result;
         uint256 payout;
-        bool claimed;
     }
 
     struct UserStats {
@@ -64,25 +60,21 @@ contract BloomBetting is Ownable, ReentrancyGuard {
 
     // ============ State Variables ============
     uint256 public currentRoundId;
-    mapping(uint256 => Round) public rounds;
-    mapping(uint256 => mapping(address => Bet)) public userBets; // roundId => user => bet
-    mapping(address => UserStats) public userStats;
-    mapping(address => uint256[]) public userRoundHistory;
+    uint256 public nextBetId;
     
-    uint256 public totalFeesCollected;
-    uint256 public feePercentage = 300; // 3% in basis points (300/10000)
-    uint256 public constant BASIS_POINTS = 10000;
+    mapping(uint256 => Round) public rounds;
+    mapping(uint256 => Bet[]) public roundBets; // roundId => all bets in round
+    mapping(address => uint256[]) public userBetIds; // user => their bet IDs across all rounds
+    mapping(uint256 => Bet) public betsById; // betId => Bet
+    mapping(address => UserStats) public userStats;
 
-    address public priceOracle; // Address authorized to submit prices
+    address public priceOracle;
 
     // ============ Events ============
     event RoundStarted(uint256 indexed roundId, uint256 startTime, uint256 startPrice);
-    event BetPlaced(uint256 indexed roundId, address indexed user, Direction direction, uint256 amount);
-    event RoundLocked(uint256 indexed roundId, uint256 lockTime);
-    event RoundResolved(uint256 indexed roundId, Direction result, uint256 endPrice);
-    event WinningsClaimed(uint256 indexed roundId, address indexed user, uint256 amount);
+    event BetPlaced(uint256 indexed roundId, uint256 indexed betId, address indexed user, Direction direction, uint256 amount);
+    event RoundSettled(uint256 indexed roundId, Direction result, uint256 endPrice, uint256 totalPayouts);
     event StreakUpdated(address indexed user, uint256 streak);
-    event FeeUpdated(uint256 oldFee, uint256 newFee);
     event OracleUpdated(address oldOracle, address newOracle);
 
     // ============ Modifiers ============
@@ -107,7 +99,7 @@ contract BloomBetting is Ownable, ReentrancyGuard {
 
     /**
      * @notice Start a new betting round
-     * @param _startPrice The ETH price at round start (in wei, 8 decimals from Chainlink)
+     * @param _startPrice The ETH price at round start (8 decimals from Chainlink)
      */
     function startRound(uint256 _startPrice) external onlyOracle {
         require(_startPrice > 0, "Invalid start price");
@@ -123,9 +115,7 @@ contract BloomBetting is Ownable, ReentrancyGuard {
         rounds[currentRoundId] = Round({
             roundId: currentRoundId,
             startTime: startTime,
-            lockTime: startTime + BETTING_DURATION,
-            resolutionTime: startTime + BETTING_DURATION + LOCK_DURATION,
-            endTime: startTime + BETTING_DURATION + LOCK_DURATION + RESOLUTION_DURATION,
+            endTime: startTime + ROUND_DURATION,
             startPrice: _startPrice,
             endPrice: 0,
             totalUpPool: 0,
@@ -138,7 +128,7 @@ contract BloomBetting is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Place a bet on the current round
+     * @notice Place a bet on the current round (UNLIMITED bets per user per round!)
      * @param _direction UP (1) or DOWN (2)
      * @param _amount Amount of BLOOM tokens to stake
      */
@@ -148,48 +138,51 @@ contract BloomBetting is Ownable, ReentrancyGuard {
         require(currentRoundId > 0, "No active round");
         
         Round storage round = rounds[currentRoundId];
-        require(block.timestamp < round.lockTime, "Betting closed");
-        require(userBets[currentRoundId][msg.sender].amount == 0, "Already bet this round");
+        require(block.timestamp < round.endTime - 10, "Betting closed (last 10s locked)");
+        require(!round.resolved, "Round already resolved");
 
-        // Transfer BLOOM tokens from user
+        // Transfer BLOOM tokens from user to contract
         bloomToken.safeTransferFrom(msg.sender, address(this), _amount);
 
-        // Update pools
+        // Update pools (for UI odds display only - not used in payout calc)
         if (_direction == Direction.Up) {
             round.totalUpPool += _amount;
         } else {
             round.totalDownPool += _amount;
         }
 
-        // Record bet
-        userBets[currentRoundId][msg.sender] = Bet({
+        // Create bet
+        nextBetId++;
+        Bet memory newBet = Bet({
+            betId: nextBetId,
             roundId: currentRoundId,
             user: msg.sender,
             direction: _direction,
             amount: _amount,
             timestamp: block.timestamp,
             result: BetResult.Pending,
-            payout: 0,
-            claimed: false
+            payout: 0
         });
 
-        userRoundHistory[msg.sender].push(currentRoundId);
+        roundBets[currentRoundId].push(newBet);
+        betsById[nextBetId] = newBet;
+        userBetIds[msg.sender].push(nextBetId);
 
         // Update streak (1 per day regardless of win/lose)
         _updateStreak(msg.sender);
 
-        emit BetPlaced(currentRoundId, msg.sender, _direction, _amount);
+        emit BetPlaced(currentRoundId, nextBetId, msg.sender, _direction, _amount);
     }
 
     /**
-     * @notice Resolve a round with the final price
-     * @param _roundId The round to resolve
+     * @notice Settle a round - INSTANT PAYOUT, no claiming needed!
+     * @param _roundId The round to settle
      * @param _endPrice The ETH price at resolution time
      */
-    function resolveRound(uint256 _roundId, uint256 _endPrice) external onlyOracle roundExists(_roundId) {
+    function settleRound(uint256 _roundId, uint256 _endPrice) external onlyOracle roundExists(_roundId) {
         Round storage round = rounds[_roundId];
         require(!round.resolved, "Already resolved");
-        require(block.timestamp >= round.resolutionTime, "Too early to resolve");
+        require(block.timestamp >= round.endTime, "Round not ended yet");
         require(_endPrice > 0, "Invalid end price");
 
         round.endPrice = _endPrice;
@@ -200,98 +193,92 @@ contract BloomBetting is Ownable, ReentrancyGuard {
         } else if (_endPrice < round.startPrice) {
             round.result = Direction.Down;
         } else {
-            round.result = Direction.None; // Draw - price unchanged
+            // DRAW = LOSS! Contract keeps all funds
+            round.result = Direction.None;
         }
 
         round.resolved = true;
 
-        emit RoundResolved(_roundId, round.result, _endPrice);
-    }
+        // Instant settlement - pay all winners immediately
+        Bet[] storage bets = roundBets[_roundId];
+        uint256 totalPayouts = 0;
 
-    /**
-     * @notice Claim winnings from a resolved round
-     * @param _roundId The round to claim from
-     */
-    function claimWinnings(uint256 _roundId) external nonReentrant roundExists(_roundId) {
-        Round storage round = rounds[_roundId];
-        require(round.resolved, "Round not resolved");
-        
-        Bet storage bet = userBets[_roundId][msg.sender];
-        require(bet.amount > 0, "No bet placed");
-        require(!bet.claimed, "Already claimed");
-
-        uint256 payout = 0;
-        
-        if (round.result == Direction.None) {
-            // Draw - return original stake
-            payout = bet.amount;
-            bet.result = BetResult.Draw;
-        } else if (bet.direction == round.result) {
-            // Winner - calculate payout
-            uint256 totalPool = round.totalUpPool + round.totalDownPool;
-            uint256 winningPool = bet.direction == Direction.Up ? round.totalUpPool : round.totalDownPool;
+        for (uint256 i = 0; i < bets.length; i++) {
+            Bet storage bet = bets[i];
             
-            // Calculate proportional winnings
-            uint256 grossPayout = (bet.amount * totalPool) / winningPool;
-            uint256 fee = (grossPayout * feePercentage) / BASIS_POINTS;
-            payout = grossPayout - fee;
+            // Only winners get paid (draw = loss, losers = nothing)
+            if (round.result != Direction.None && bet.direction == round.result) {
+                // Fixed 2x payout
+                uint256 payout = bet.amount * 2;
+                bet.payout = payout;
+                bet.result = BetResult.Win;
+                
+                // Transfer winnings immediately
+                bloomToken.safeTransfer(bet.user, payout);
+                totalPayouts += payout;
+                
+                // Update user stats
+                userStats[bet.user].totalWins++;
+                userStats[bet.user].totalWinnings += bet.amount; // Net profit
+            } else {
+                // Losers and draws - contract keeps funds
+                bet.result = BetResult.Lose;
+                bet.payout = 0;
+                userStats[bet.user].totalLosses++;
+            }
             
-            totalFeesCollected += fee;
-            bet.result = BetResult.Win;
+            // Update bet in mapping
+            betsById[bet.betId] = bet;
             
-            // Update user stats
-            userStats[msg.sender].totalWins++;
-            userStats[msg.sender].totalWinnings += payout - bet.amount;
-        } else {
-            // Loser - no payout
-            bet.result = BetResult.Lose;
-            userStats[msg.sender].totalLosses++;
+            // Update general stats
+            userStats[bet.user].totalBets++;
+            userStats[bet.user].totalStaked += bet.amount;
         }
 
-        bet.payout = payout;
-        bet.claimed = true;
-        userStats[msg.sender].totalBets++;
-        userStats[msg.sender].totalStaked += bet.amount;
-
-        if (payout > 0) {
-            bloomToken.safeTransfer(msg.sender, payout);
-            emit WinningsClaimed(_roundId, msg.sender, payout);
-        }
+        emit RoundSettled(_roundId, round.result, _endPrice, totalPayouts);
     }
 
     // ============ View Functions ============
 
     /**
-     * @notice Get current round phase
+     * @notice Check if betting is currently open
      */
-    function getCurrentPhase() public view returns (RoundPhase) {
-        if (currentRoundId == 0) return RoundPhase.Betting;
-        
+    function isBettingOpen() public view returns (bool) {
+        if (currentRoundId == 0) return false;
         Round storage round = rounds[currentRoundId];
-        
-        if (round.resolved) return RoundPhase.Resolved;
-        if (block.timestamp >= round.resolutionTime) return RoundPhase.Resolving;
-        if (block.timestamp >= round.lockTime) return RoundPhase.Locked;
-        return RoundPhase.Betting;
+        // Betting closes 10 seconds before round ends
+        return !round.resolved && block.timestamp < round.endTime - 10;
     }
 
     /**
-     * @notice Get time remaining in current phase
+     * @notice Get time remaining in current round
      */
     function getTimeRemaining() public view returns (uint256) {
         if (currentRoundId == 0) return 0;
-        
         Round storage round = rounds[currentRoundId];
-        RoundPhase phase = getCurrentPhase();
+        if (round.resolved || block.timestamp >= round.endTime) return 0;
+        return round.endTime - block.timestamp;
+    }
 
-        if (phase == RoundPhase.Betting) {
-            return round.lockTime > block.timestamp ? round.lockTime - block.timestamp : 0;
-        } else if (phase == RoundPhase.Locked) {
-            return round.resolutionTime > block.timestamp ? round.resolutionTime - block.timestamp : 0;
-        } else if (phase == RoundPhase.Resolving) {
-            return round.endTime > block.timestamp ? round.endTime - block.timestamp : 0;
-        }
-        return 0;
+    /**
+     * @notice Get all bets for a round
+     */
+    function getRoundBets(uint256 _roundId) external view returns (Bet[] memory) {
+        return roundBets[_roundId];
+    }
+
+    /**
+     * @notice Get user's bet IDs
+     */
+    function getUserBetIds(address _user) external view returns (uint256[] memory) {
+        return userBetIds[_user];
+    }
+
+    /**
+     * @notice Get a specific bet by ID
+     */
+    function getBet(uint256 _betId) external view returns (Bet memory) {
+        return betsById[_betId];
     }
 
     /**
@@ -302,10 +289,10 @@ contract BloomBetting is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Get user's bet for a round
+     * @notice Get current round
      */
-    function getUserBet(uint256 _roundId, address _user) external view returns (Bet memory) {
-        return userBets[_roundId][_user];
+    function getCurrentRound() external view returns (Round memory) {
+        return rounds[currentRoundId];
     }
 
     /**
@@ -316,7 +303,7 @@ contract BloomBetting is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Get current pool sizes
+     * @notice Get current pool sizes (for frontend odds display)
      */
     function getCurrentPools() external view returns (uint256 upPool, uint256 downPool) {
         if (currentRoundId == 0) return (0, 0);
@@ -325,20 +312,17 @@ contract BloomBetting is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Calculate potential payout for a bet
+     * @notice Get bet count for current round
      */
-    function calculatePotentialPayout(Direction _direction, uint256 _amount) external view returns (uint256) {
-        if (currentRoundId == 0) return _amount * 2; // Default 2x
-        
-        Round storage round = rounds[currentRoundId];
-        uint256 totalPool = round.totalUpPool + round.totalDownPool + _amount;
-        uint256 winningPool = _direction == Direction.Up 
-            ? round.totalUpPool + _amount 
-            : round.totalDownPool + _amount;
-        
-        uint256 grossPayout = (_amount * totalPool) / winningPool;
-        uint256 fee = (grossPayout * feePercentage) / BASIS_POINTS;
-        return grossPayout - fee;
+    function getCurrentRoundBetCount() external view returns (uint256) {
+        return roundBets[currentRoundId].length;
+    }
+
+    /**
+     * @notice Get contract's BLOOM balance (house profits)
+     */
+    function getHouseBalance() external view returns (uint256) {
+        return bloomToken.balanceOf(address(this));
     }
 
     // ============ Internal Functions ============
@@ -364,35 +348,37 @@ contract BloomBetting is Ownable, ReentrancyGuard {
 
     // ============ Admin Functions ============
 
-    function setFeePercentage(uint256 _newFee) external onlyOwner {
-        require(_newFee <= 1000, "Fee too high"); // Max 10%
-        emit FeeUpdated(feePercentage, _newFee);
-        feePercentage = _newFee;
-    }
-
     function setPriceOracle(address _newOracle) external onlyOwner {
         require(_newOracle != address(0), "Invalid oracle");
         emit OracleUpdated(priceOracle, _newOracle);
         priceOracle = _newOracle;
     }
 
-    function withdrawFees(address _to) external onlyOwner {
+    /**
+     * @notice Withdraw house profits (losing bets that stay in contract)
+     * @param _to Address to send funds to
+     * @param _amount Amount to withdraw
+     */
+    function withdrawHouseProfits(address _to, uint256 _amount) external onlyOwner {
         require(_to != address(0), "Invalid address");
-        uint256 amount = totalFeesCollected;
-        totalFeesCollected = 0;
-        bloomToken.safeTransfer(_to, amount);
+        require(_amount <= bloomToken.balanceOf(address(this)), "Insufficient balance");
+        bloomToken.safeTransfer(_to, _amount);
     }
 
     /**
-     * @notice Emergency function to cancel a round and refund all bets
+     * @notice Emergency function to cancel a round (no payouts, everyone keeps pending status)
      */
     function emergencyCancelRound(uint256 _roundId) external onlyOwner roundExists(_roundId) {
         Round storage round = rounds[_roundId];
         require(!round.resolved, "Already resolved");
         
+        // Refund all bets in this round
+        Bet[] storage bets = roundBets[_roundId];
+        for (uint256 i = 0; i < bets.length; i++) {
+            bloomToken.safeTransfer(bets[i].user, bets[i].amount);
+        }
+        
         round.resolved = true;
         round.result = Direction.None;
-        
-        // Users can claim refunds via claimWinnings (will get Draw result)
     }
 }

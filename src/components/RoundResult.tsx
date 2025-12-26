@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { TrendingUp, TrendingDown, Minus, Trophy, X } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Trophy, X, Zap } from "lucide-react";
 
 interface RoundResultProps {
   result: "up" | "down" | "draw" | null;
@@ -16,8 +16,9 @@ const RoundResult = ({
   isVisible,
   onClose,
 }: RoundResultProps) => {
-  const isWin = result === userBet && result !== null;
-  const isDraw = result === "draw";
+  // HyperWave: Draw = Loss (no refunds, house keeps funds)
+  const isWin = result !== null && result !== "draw" && result === userBet;
+  const isLoss = !isWin;
 
   return (
     <AnimatePresence>
@@ -32,8 +33,6 @@ const RoundResult = ({
             className={`relative p-8 rounded-3xl glass border-2 ${
               isWin
                 ? "border-success glow-success"
-                : isDraw
-                ? "border-accent glow-accent"
                 : "border-danger glow-danger"
             }`}
             initial={{ scale: 0.5, opacity: 0 }}
@@ -62,7 +61,7 @@ const RoundResult = ({
                     ? "bg-success/20"
                     : result === "down"
                     ? "bg-danger/20"
-                    : "bg-accent/20"
+                    : "bg-warning/20"
                 }`}
               >
                 {result === "up" ? (
@@ -70,7 +69,7 @@ const RoundResult = ({
                 ) : result === "down" ? (
                   <TrendingDown className="w-16 h-16 text-danger" />
                 ) : (
-                  <Minus className="w-16 h-16 text-accent" />
+                  <Minus className="w-16 h-16 text-warning" />
                 )}
               </div>
             </motion.div>
@@ -88,13 +87,15 @@ const RoundResult = ({
                     ? "text-success text-glow-success"
                     : result === "down"
                     ? "text-danger text-glow-danger"
-                    : "text-accent text-glow-accent"
+                    : "text-warning text-glow-warning"
                 }`}
               >
-                {result?.toUpperCase() || "DRAW"}
+                {result === "draw" ? "DRAW" : result?.toUpperCase()}
               </h2>
               <p className="text-muted-foreground">
-                Market moved {result === "draw" ? "nowhere" : result}
+                {result === "draw" 
+                  ? "Price unchanged - House wins" 
+                  : `Market moved ${result}`}
               </p>
             </motion.div>
 
@@ -104,8 +105,6 @@ const RoundResult = ({
                 className={`p-4 rounded-xl ${
                   isWin
                     ? "bg-success/10 border border-success/30"
-                    : isDraw
-                    ? "bg-accent/10 border border-accent/30"
                     : "bg-danger/10 border border-danger/30"
                 }`}
                 initial={{ y: 20, opacity: 0 }}
@@ -116,33 +115,42 @@ const RoundResult = ({
                   {isWin && <Trophy className="w-6 h-6 text-success" />}
                   <div className="text-center">
                     <p className="text-sm text-muted-foreground mb-1">
-                      {isWin ? "You Won!" : isDraw ? "Draw - Bet Lost" : "You Lost"}
+                      {isWin ? "You Won! 🎉" : result === "draw" ? "Draw = Loss" : "You Lost"}
                     </p>
                     <p
                       className={`text-2xl font-display font-bold ${
                         isWin
                           ? "text-success text-glow-success"
-                          : isDraw
-                          ? "text-accent"
                           : "text-danger"
                       }`}
                     >
-                      {isWin ? `+${amount * 2}` : isDraw ? `-${amount}` : `-${amount}`} ETH
+                      {isWin ? `+${(amount * 2).toLocaleString()}` : `-${amount.toLocaleString()}`} $BLOOM
                     </p>
+                    {isWin && (
+                      <p className="text-xs text-success/80 mt-1">
+                        <Zap className="w-3 h-3 inline mr-1" />
+                        Paid instantly to your wallet
+                      </p>
+                    )}
                   </div>
                 </div>
               </motion.div>
             )}
 
             {/* Reward Earned */}
-            <motion.p
-              className="text-center text-sm text-accent mt-4"
+            <motion.div
+              className="text-center mt-4 p-2 rounded-lg bg-primary/10 border border-primary/20"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5 }}
             >
-              +10 reward tokens earned! 🎁
-            </motion.p>
+              <p className="text-sm text-primary">
+                +10 reward tokens earned! 🎁
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Claim after 7-day streak
+              </p>
+            </motion.div>
           </motion.div>
         </motion.div>
       )}

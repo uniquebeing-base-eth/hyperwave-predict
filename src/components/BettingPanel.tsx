@@ -128,11 +128,11 @@ const BettingPanel = ({
         </motion.div>
       </div>
 
-      {/* Odds Bar */}
+      {/* Odds Bar - VISUAL ONLY (Fixed 2x payout regardless of distribution) */}
       <div className="mb-6">
         <div className="flex justify-between text-xs text-muted-foreground mb-2">
-          <span>Distribution</span>
-          <span>2× Payout</span>
+          <span>Pool Distribution (visual only)</span>
+          <span className="text-success font-bold">Always 2× Payout</span>
         </div>
         <div className="h-3 rounded-full overflow-hidden flex bg-muted">
           <motion.div
@@ -150,6 +150,9 @@ const BettingPanel = ({
             transition={{ duration: 0.5 }}
           />
         </div>
+        <p className="text-xs text-muted-foreground/60 mt-1 text-center">
+          Unlimited bets per round • Draws = loss • Instant payouts
+        </p>
       </div>
 
       {/* Bet Amount */}
