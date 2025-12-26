@@ -1,27 +1,37 @@
 {
   "accountAssociation": {
-    "header": "",
-    "payload": "",
-    "signature": ""
+    "header": "eyJmaWQiOjg0OTExNiwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweGQzRDViRmMyOGJjMjA5OTg4NGEzNmVkNDE2NTY4NzRCQ2RENDYzMTUifQ",
+    "payload": "eyJkb21haW4iOiJoeXBlcndhdmV4Lnh5eiJ9",
+    "signature": "bKTP35WZzBvhGBCWIwb6MK3Lzy/LJ9uDQlqa1IRG5uBgkxphZBElMROyAIvJjrCNLXE5lS8JgReqiOzaOynvKBs="
   },
   "miniapp": {
     "version": "1",
     "name": "HyperWave",
     "iconUrl": "https://hyperwavex.xyz/icon.png",
     "homeUrl": "https://hyperwavex.xyz",
+    "castShareUrl": "https://hyperwavex.xyz",
     "imageUrl": "https://hyperwavex.xyz/preview.png",
-    "buttonTitle": "⚡ Play Now",
+    "buttonTitle": "Launch HyperWave",
     "splashImageUrl": "https://hyperwavex.xyz/icon.png",
     "splashBackgroundColor": "#0a0a12",
-    "subtitle": "Stake. Predict. Win.",
-    "description": "Fast-paced prediction market where you stake tokens to predict crypto price movements. Win 2x payouts and earn rewards!",
+    "webhookUrl": "https://api.neynar.com/f/app/d72fc6fc-2ae5-4b1d-87ef-ff6be0f6c165/event",
+    "subtitle": "Stake Predict and Win Big",
+    "description": "Fast prediction market stake tokens win rewards",
     "primaryCategory": "games",
     "tags": [
+      "gaming",
       "prediction",
       "crypto",
-      "betting",
       "trading",
       "rewards"
-    ]
+    ],
+    "heroImageUrl": "https://hyperwavex.xyz/preview.png",
+    "tagline": "Stake Predict and Win Big",
+    "ogTitle": "HyperWave",
+    "ogDescription": "Fast-paced prediction market gaming",
+    "ogImageUrl": "https://hyperwavex.xyz/preview.png"
+  },
+  "baseBuilder": {
+    "ownerAddress": "0x170c5a413136F094421fad8Dd20285b5e05Fff5e"
   }
 }
