@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import PriceChart from "@/components/PriceChart";
-import CountdownTimer from "@/components/CountdownTimer";
+import GameTimer, { GamePhase } from "@/components/GameTimer";
 import BettingPanel from "@/components/BettingPanel";
 import RecentBets from "@/components/RecentBets";
 
@@ -19,8 +19,13 @@ interface ActionPageProps {
   isBettingOpen: boolean;
   recentBets: Bet[];
   onPlaceBet: (direction: "up" | "down", amount: number) => void;
-  onRoundComplete: () => void;
+  onPhaseChange: (phase: GamePhase) => void;
+  onResolutionComplete: () => void;
+  onPriceSnapshot: () => void;
   onPriceUpdate?: (price: number, change: number) => void;
+  currentPhase: GamePhase;
+  roundNumber: number;
+  minimumStake: number;
 }
 
 const ActionPage = ({
@@ -30,8 +35,13 @@ const ActionPage = ({
   isBettingOpen,
   recentBets,
   onPlaceBet,
-  onRoundComplete,
+  onPhaseChange,
+  onResolutionComplete,
+  onPriceSnapshot,
   onPriceUpdate,
+  currentPhase,
+  roundNumber,
+  minimumStake,
 }: ActionPageProps) => {
   return (
     <motion.div
@@ -47,10 +57,13 @@ const ActionPage = ({
         animate={{ opacity: 1, y: 0 }}
       >
         <h2 className="text-lg md:text-xl font-display uppercase tracking-widest text-muted-foreground mb-2">
-          Round <span className="text-primary text-glow-primary">#1,247</span>
+          Round <span className="text-primary text-glow-primary">#{roundNumber.toLocaleString()}</span>
         </h2>
         <p className="text-sm text-muted-foreground">
-          Predict the next move. Win 2× your stake.
+          Predict the next move. Win from the pool.
+        </p>
+        <p className="text-xs text-muted-foreground/70 mt-1">
+          Min stake: {minimumStake.toLocaleString()} $BLOOM
         </p>
       </motion.div>
 
@@ -59,10 +72,10 @@ const ActionPage = ({
 
       {/* Timer */}
       <div className="flex justify-center">
-        <CountdownTimer
-          duration={60}
-          onComplete={onRoundComplete}
-          isActive={true}
+        <GameTimer
+          onPhaseChange={onPhaseChange}
+          onResolutionComplete={onResolutionComplete}
+          onPriceSnapshot={onPriceSnapshot}
         />
       </div>
 
@@ -73,6 +86,7 @@ const ActionPage = ({
         upOdds={upOdds}
         downOdds={downOdds}
         isBettingOpen={isBettingOpen}
+        minimumStake={minimumStake}
       />
 
       {/* Recent Bets */}

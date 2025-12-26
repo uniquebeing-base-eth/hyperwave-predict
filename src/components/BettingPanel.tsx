@@ -10,6 +10,7 @@ interface BettingPanelProps {
   upOdds: number;
   downOdds: number;
   isBettingOpen: boolean;
+  minimumStake?: number;
 }
 
 const BettingPanel = ({
@@ -18,11 +19,12 @@ const BettingPanel = ({
   upOdds,
   downOdds,
   isBettingOpen,
+  minimumStake = 100000,
 }: BettingPanelProps) => {
-  const [betAmount, setBetAmount] = useState<number>(10);
+  const [betAmount, setBetAmount] = useState<number>(minimumStake);
   const [selectedDirection, setSelectedDirection] = useState<"up" | "down" | null>(null);
 
-  const presetAmounts = [10, 25, 50, 100];
+  const presetAmounts = [100000, 250000, 500000, 1000000];
 
   const handlePlaceBet = () => {
     if (!selectedDirection) {
@@ -43,10 +45,10 @@ const BettingPanel = ({
       return;
     }
 
-    if (betAmount <= 0) {
+    if (betAmount < minimumStake) {
       toast({
-        title: "Invalid Amount",
-        description: "Please enter a valid bet amount",
+        title: "Below Minimum",
+        description: `Minimum stake is ${minimumStake.toLocaleString()} $BLOOM`,
         variant: "destructive",
       });
       return;
@@ -189,8 +191,8 @@ const BettingPanel = ({
         </div>
 
         <div className="flex justify-between mt-2 text-xs text-muted-foreground">
-          <span>Min: 1</span>
-          <span>Balance: {balance.toLocaleString()}</span>
+          <span>Min: {minimumStake.toLocaleString()}</span>
+          <span>Balance: {balance.toLocaleString()} $BLOOM</span>
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Routes, Route } from "react-router-dom";
 import MainLayout from "@/components/MainLayout";
 import ActionPage from "@/pages/ActionPage";
@@ -6,6 +6,8 @@ import RewardsPage from "@/pages/RewardsPage";
 import StatsPage from "@/pages/StatsPage";
 import RoundResult from "@/components/RoundResult";
 import { useMiniAppPrompt } from "@/hooks/useMiniAppPrompt";
+import { useWalletBalances } from "@/hooks/useWalletBalances";
+import { GamePhase } from "@/components/GameTimer";
 
 interface Bet {
   id: string;
@@ -15,43 +17,106 @@ interface Bet {
   timestamp: Date;
 }
 
+const MINIMUM_STAKE = 100000; // 100,000 BLOOM minimum
+
 const Index = () => {
   // Initialize mini app prompt
   useMiniAppPrompt();
   
-  // User state
-  const [balance, setBalance] = useState(1000);
+  // Wallet balances
+  const { bloomBalance, isConnected } = useWalletBalances();
+  const bloomBalanceNum = parseFloat(bloomBalance.replace(/,/g, '')) || 0;
+  
+  // Game state
+  const [currentPhase, setCurrentPhase] = useState<GamePhase>("betting");
   const [totalBets, setTotalBets] = useState(0);
   const [wins, setWins] = useState(0);
   const [streak, setStreak] = useState(0);
   const [rewards, setRewards] = useState(0);
+  const [roundNumber, setRoundNumber] = useState(1);
 
   // Betting state
   const [currentBet, setCurrentBet] = useState<{ direction: "up" | "down"; amount: number } | null>(null);
   const [recentBets, setRecentBets] = useState<Bet[]>([]);
-  const [isBettingOpen, setIsBettingOpen] = useState(true);
 
-  // Odds (simulated)
-  const [upOdds, setUpOdds] = useState(55);
-  const [downOdds, setDownOdds] = useState(45);
+  // Odds (based on pool distribution)
+  const [upOdds, setUpOdds] = useState(50);
+  const [downOdds, setDownOdds] = useState(50);
 
   // Price state from real ETH data
   const [currentPrice, setCurrentPrice] = useState(0);
   const [priceChange, setPriceChange] = useState(0);
+  const startPriceRef = useRef<number>(0);
+  const endPriceRef = useRef<number>(0);
 
   // Result modal
   const [showResult, setShowResult] = useState(false);
   const [roundResult, setRoundResult] = useState<"up" | "down" | "draw" | null>(null);
 
+  // Track daily streak
+  const lastPlayedDayRef = useRef<string | null>(null);
+
+  const updateStreak = useCallback(() => {
+    const today = new Date().toDateString();
+    if (lastPlayedDayRef.current === today) {
+      // Already played today, streak doesn't change
+      return;
+    }
+    
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    if (lastPlayedDayRef.current === yesterday.toDateString()) {
+      // Played yesterday, increment streak
+      setStreak(prev => prev + 1);
+    } else if (lastPlayedDayRef.current !== today) {
+      // Missed a day or first time, set streak to 1
+      setStreak(1);
+    }
+    
+    lastPlayedDayRef.current = today;
+  }, []);
+
   const handlePriceUpdate = useCallback((price: number, change: number) => {
     setCurrentPrice(price);
     setPriceChange(change);
-  }, []);
+    
+    // Set start price when betting phase begins
+    if (currentPhase === "betting" && startPriceRef.current === 0) {
+      startPriceRef.current = price;
+    }
+  }, [currentPhase]);
+
+  const handlePhaseChange = useCallback((phase: GamePhase) => {
+    setCurrentPhase(phase);
+    
+    if (phase === "betting") {
+      // New round starting
+      startPriceRef.current = currentPrice;
+      setRoundNumber(prev => prev + 1);
+    }
+  }, [currentPrice]);
+
+  const handlePriceSnapshot = useCallback(() => {
+    endPriceRef.current = currentPrice;
+  }, [currentPrice]);
 
   const handlePlaceBet = (direction: "up" | "down", amount: number) => {
-    if (amount > balance) return;
+    // Check minimum stake
+    if (amount < MINIMUM_STAKE) {
+      return;
+    }
 
-    setBalance((prev) => prev - amount);
+    // Check if betting is allowed
+    if (currentPhase !== "betting") {
+      return;
+    }
+
+    // Check wallet balance
+    if (amount > bloomBalanceNum) {
+      return;
+    }
+
     setCurrentBet({ direction, amount });
 
     // Update odds dynamically
@@ -72,69 +137,84 @@ const Index = () => {
       timestamp: new Date(),
     };
     setRecentBets((prev) => [newBet, ...prev.slice(0, 9)]);
+
+    // Update streak for playing today
+    updateStreak();
   };
 
-  const handleRoundComplete = useCallback(() => {
-    setIsBettingOpen(false);
+  const handleResolutionComplete = useCallback(() => {
+    // Determine result based on price movement
+    const startPrice = startPriceRef.current;
+    const endPrice = endPriceRef.current || currentPrice;
+    
+    let result: "up" | "down" | "draw";
+    if (endPrice > startPrice) {
+      result = "up";
+    } else if (endPrice < startPrice) {
+      result = "down";
+    } else {
+      result = "draw";
+    }
+    
+    setRoundResult(result);
 
-    // Simulate result after brief delay
-    setTimeout(() => {
-      const outcomes: ("up" | "down" | "draw")[] = ["up", "down", "draw"];
-      const result = outcomes[Math.floor(Math.random() * 10) % 3];
-      setRoundResult(result);
+    if (currentBet) {
+      const isWin = result === currentBet.direction;
+      const isDraw = result === "draw";
 
-      if (currentBet) {
-        const isWin = result === currentBet.direction;
+      setTotalBets((prev) => prev + 1);
+      setRewards((prev) => prev + 10); // Base reward for playing
 
-        setTotalBets((prev) => prev + 1);
-        setRewards((prev) => prev + 10);
-
-        if (isWin) {
-          setBalance((prev) => prev + currentBet.amount * 2);
-          setWins((prev) => prev + 1);
-          setStreak((prev) => prev + 1);
-        } else {
-          setStreak(0);
-        }
-
-        // Update recent bets
-        setRecentBets((prev) =>
-          prev.map((bet) =>
-            bet.result === "pending"
-              ? { ...bet, result: isWin ? "win" : "lose" }
-              : bet
-          )
-        );
-
-        setShowResult(true);
+      if (isWin) {
+        setWins((prev) => prev + 1);
       }
 
-      // Reset for next round
-      setTimeout(() => {
-        setCurrentBet(null);
-        setIsBettingOpen(true);
-        setUpOdds(50 + Math.floor(Math.random() * 10 - 5));
-        setDownOdds(50 - Math.floor(Math.random() * 10 - 5));
-      }, 3000);
-    }, 2000);
-  }, [currentBet]);
+      // Update recent bets
+      setRecentBets((prev) =>
+        prev.map((bet) =>
+          bet.result === "pending"
+            ? { ...bet, result: isDraw ? "pending" : isWin ? "win" : "lose" }
+            : bet
+        )
+      );
+
+      setShowResult(true);
+    }
+
+    // Reset for next round
+    setTimeout(() => {
+      setCurrentBet(null);
+      setUpOdds(50);
+      setDownOdds(50);
+      startPriceRef.current = 0;
+      endPriceRef.current = 0;
+    }, 3000);
+  }, [currentBet, currentPrice]);
+
+  // Calculate if betting is allowed
+  const isBettingOpen = currentPhase === "betting";
 
   return (
     <>
-      <MainLayout balance={balance} isConnected={true}>
+      <MainLayout>
         <Routes>
           <Route
             index
             element={
               <ActionPage
-                balance={balance}
+                balance={bloomBalanceNum}
                 upOdds={upOdds}
                 downOdds={downOdds}
                 isBettingOpen={isBettingOpen}
                 recentBets={recentBets}
                 onPlaceBet={handlePlaceBet}
-                onRoundComplete={handleRoundComplete}
+                onPhaseChange={handlePhaseChange}
+                onResolutionComplete={handleResolutionComplete}
+                onPriceSnapshot={handlePriceSnapshot}
                 onPriceUpdate={handlePriceUpdate}
+                currentPhase={currentPhase}
+                roundNumber={roundNumber}
+                minimumStake={MINIMUM_STAKE}
               />
             }
           />
@@ -143,7 +223,7 @@ const Index = () => {
             path="stats"
             element={
               <StatsPage
-                balance={balance}
+                balance={bloomBalanceNum}
                 totalBets={totalBets}
                 wins={wins}
                 streak={streak}
