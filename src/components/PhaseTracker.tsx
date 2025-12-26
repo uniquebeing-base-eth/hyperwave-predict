@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
-import { Calendar, Gift, Clock } from "lucide-react";
+import { Calendar, Gift, Timer } from "lucide-react";
+import { useCountdown, getPhaseEndDate } from "@/hooks/useCountdown";
 
 interface PhaseTrackerProps {
   currentPhase: number;
@@ -14,7 +15,25 @@ const PhaseTracker = ({
   totalRewards,
   tokenSymbol,
 }: PhaseTrackerProps) => {
+  // Calculate phase end date based on days remaining
+  const daysPlayed = 7 - daysRemaining;
+  const phaseStartDate = new Date();
+  phaseStartDate.setDate(phaseStartDate.getDate() - daysPlayed);
+  
+  const phaseEndDate = getPhaseEndDate(phaseStartDate, daysPlayed);
+  const { days, hours, minutes, isEnded } = useCountdown(phaseEndDate);
+
   const progressPercentage = ((7 - daysRemaining) / 7) * 100;
+
+  const formatCountdown = () => {
+    if (isEnded) return "Phase Ended";
+    
+    const dayLabel = days === 1 ? "day" : "days";
+    const hourLabel = hours === 1 ? "hour" : "hours";
+    const minLabel = minutes === 1 ? "min" : "mins";
+    
+    return `${days} ${dayLabel} ${hours} ${hourLabel} ${minutes} ${minLabel}`;
+  };
 
   return (
     <motion.div
@@ -34,6 +53,25 @@ const PhaseTracker = ({
         <span className="text-xs text-muted-foreground">
           {tokenSymbol} Season
         </span>
+      </div>
+
+      {/* Countdown Timer */}
+      <div className="mb-4 p-4 rounded-xl bg-muted/30 border border-border/50">
+        <div className="flex items-center gap-2 mb-2">
+          <Timer className="w-4 h-4 text-accent" />
+          <span className="text-xs text-muted-foreground uppercase tracking-wider">
+            Time Remaining
+          </span>
+        </div>
+        <motion.p
+          className={`text-xl font-display font-bold ${
+            isEnded ? "text-muted-foreground" : "text-accent text-glow-accent"
+          }`}
+          animate={!isEnded ? { opacity: [1, 0.8, 1] } : {}}
+          transition={{ duration: 2, repeat: Infinity }}
+        >
+          {formatCountdown()}
+        </motion.p>
       </div>
 
       {/* Progress Bar */}
@@ -59,11 +97,11 @@ const PhaseTracker = ({
       <div className="grid grid-cols-2 gap-3">
         <div className="p-3 rounded-lg bg-muted/50">
           <div className="flex items-center gap-2 mb-1">
-            <Clock className="w-3 h-3 text-muted-foreground" />
+            <Timer className="w-3 h-3 text-muted-foreground" />
             <span className="text-xs text-muted-foreground">Time Left</span>
           </div>
           <span className="text-lg font-display font-bold text-foreground">
-            {daysRemaining}d
+            {days}d {hours}h {minutes}m
           </span>
         </div>
 
@@ -79,7 +117,7 @@ const PhaseTracker = ({
       </div>
 
       {/* Claim Info */}
-      {daysRemaining === 0 && (
+      {isEnded && (
         <motion.div
           className="mt-4 p-3 rounded-lg bg-accent/20 border border-accent/30"
           initial={{ opacity: 0, scale: 0.9 }}
