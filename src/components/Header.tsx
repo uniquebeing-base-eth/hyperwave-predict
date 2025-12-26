@@ -3,15 +3,14 @@ import { Zap, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useFarcaster } from "@/contexts/FarcasterContext";
 import { useWalletBalances } from "@/hooks/useWalletBalances";
+import ProfileDropdown from "@/components/ProfileDropdown";
 
 const Header = () => {
-  const { user, isAuthenticated, isInMiniApp } = useFarcaster();
-  const { ethBalance, bloomBalance, isConnected, connectWallet, isLoading } = useWalletBalances();
+  const { isAuthenticated, isInMiniApp } = useFarcaster();
+  const { isConnected, connectWallet, isLoading } = useWalletBalances();
 
   // Use Farcaster user if available, otherwise fall back to wallet connection
   const showConnected = isInMiniApp ? isAuthenticated : isConnected;
-  const displayName = user?.displayName || user?.username || "User";
-  const pfpUrl = user?.pfpUrl;
 
   return (
     <motion.header
@@ -45,42 +44,9 @@ const Header = () => {
         </motion.div>
 
         {/* User Info */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
           {showConnected ? (
-            <motion.div
-              className="flex items-center gap-3 px-4 py-2 rounded-xl glass"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-            >
-              <div className="text-right">
-                <div className="flex items-center gap-2 justify-end">
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">ETH</p>
-                    <p className="font-display font-bold text-foreground text-sm">
-                      {ethBalance}
-                    </p>
-                  </div>
-                  <div className="w-px h-8 bg-border" />
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">$BLOOM</p>
-                    <p className="font-display font-bold text-primary text-glow-primary text-sm">
-                      {bloomBalance}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              {pfpUrl ? (
-                <img
-                  src={pfpUrl}
-                  alt={displayName}
-                  className="w-10 h-10 rounded-full border-2 border-primary/50"
-                />
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center">
-                  <Wallet className="w-5 h-5 text-primary-foreground" />
-                </div>
-              )}
-            </motion.div>
+            <ProfileDropdown />
           ) : (
             <Button 
               variant="neon" 
@@ -89,7 +55,7 @@ const Header = () => {
               disabled={isLoading}
             >
               <Wallet className="w-4 h-4" />
-              {isLoading ? "Loading..." : "Connect"}
+              {isLoading ? "..." : "Connect"}
             </Button>
           )}
         </div>

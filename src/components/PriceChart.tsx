@@ -71,10 +71,10 @@ const PriceChart = ({ onPriceUpdate }: PriceChartProps) => {
 
   if (isLoading) {
     return (
-      <div className="relative w-full h-64 md:h-80 overflow-hidden rounded-2xl glass flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <span className="text-sm text-muted-foreground">Loading ETH price...</span>
+      <div className="relative w-full h-48 sm:h-56 md:h-64 overflow-hidden rounded-xl glass flex items-center justify-center">
+        <div className="flex flex-col items-center gap-2">
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          <span className="text-xs text-muted-foreground">Loading price...</span>
         </div>
       </div>
     );
@@ -82,31 +82,27 @@ const PriceChart = ({ onPriceUpdate }: PriceChartProps) => {
 
   if (error && price === 0) {
     return (
-      <div className="relative w-full h-64 md:h-80 overflow-hidden rounded-2xl glass flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-danger">
-          <span className="text-sm">{error}</span>
-          <span className="text-xs text-muted-foreground">Using demo data</span>
+      <div className="relative w-full h-48 sm:h-56 md:h-64 overflow-hidden rounded-xl glass flex items-center justify-center">
+        <div className="flex flex-col items-center gap-2 text-danger">
+          <span className="text-xs">{error}</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="relative w-full h-64 md:h-80 overflow-hidden rounded-2xl glass">
-      {/* Background Grid */}
-      <div className="absolute inset-0 opacity-20">
+    <div className="relative w-full h-48 sm:h-56 md:h-64 overflow-hidden rounded-xl glass">
+      {/* Background Grid - simplified for mobile */}
+      <div className="absolute inset-0 opacity-10">
         <svg width="100%" height="100%" className="overflow-visible">
           <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-primary/30" />
+            <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
+              <path d="M 30 0 L 0 0 0 30" fill="none" stroke="currentColor" strokeWidth="0.3" className="text-primary/20" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#grid)" />
         </svg>
       </div>
-
-      {/* Scanning Line Effect */}
-      <div className="absolute inset-0 scan-line pointer-events-none" />
 
       {/* Price Chart */}
       <svg
@@ -124,7 +120,7 @@ const PriceChart = ({ onPriceUpdate }: PriceChartProps) => {
             <stop offset="100%" stopColor="hsl(350, 100%, 55%)" stopOpacity="0" />
           </linearGradient>
           <filter id="glow">
-            <feGaussianBlur stdDeviation="2" result="coloredBlur" />
+            <feGaussianBlur stdDeviation="1.5" result="coloredBlur" />
             <feMerge>
               <feMergeNode in="coloredBlur" />
               <feMergeNode in="SourceGraphic" />
@@ -146,11 +142,11 @@ const PriceChart = ({ onPriceUpdate }: PriceChartProps) => {
           d={chartPath}
           fill="none"
           stroke={strokeColor}
-          strokeWidth="0.5"
+          strokeWidth="0.6"
           filter="url(#glow)"
           initial={{ pathLength: 0 }}
           animate={{ pathLength: 1 }}
-          transition={{ duration: 2, ease: "easeOut" }}
+          transition={{ duration: 1.5, ease: "easeOut" }}
         />
 
         {/* Current Price Dot */}
@@ -158,42 +154,42 @@ const PriceChart = ({ onPriceUpdate }: PriceChartProps) => {
           <motion.circle
             cx="95"
             cy={lastY}
-            r="1.5"
+            r="1.2"
             fill={strokeColor}
             filter="url(#glow)"
-            animate={{ scale: [1, 1.5, 1] }}
-            transition={{ duration: 1, repeat: Infinity }}
+            animate={{ scale: [1, 1.3, 1] }}
+            transition={{ duration: 1.5, repeat: Infinity }}
           />
         )}
       </svg>
 
-      {/* Price Info Overlay */}
-      <div className="absolute top-4 left-4 z-10">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-xs text-muted-foreground uppercase tracking-wider">ETH/USD</span>
+      {/* Price Info Overlay - Compact for mobile */}
+      <div className="absolute top-3 left-3 z-10">
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">ETH/USD</span>
         </div>
-        <div className="flex items-baseline gap-3">
-          <span className="text-3xl md:text-4xl font-display font-bold text-foreground">
+        <div className="flex items-center gap-2">
+          <span className="text-2xl sm:text-3xl font-display font-bold text-foreground">
             ${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
-          <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-sm font-semibold ${
+          <div className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-semibold ${
             isPositive 
               ? "bg-success/20 text-success" 
               : "bg-danger/20 text-danger"
           }`}>
-            {isPositive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+            {isPositive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
             <span>{isPositive ? "+" : ""}{change24h.toFixed(2)}%</span>
           </div>
         </div>
       </div>
 
       {/* Live Indicator */}
-      <div className="absolute top-4 right-4 flex items-center gap-2">
-        <span className="relative flex h-2 w-2">
+      <div className="absolute top-3 right-3 flex items-center gap-1.5">
+        <span className="relative flex h-1.5 w-1.5">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
+          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success"></span>
         </span>
-        <span className="text-xs text-muted-foreground uppercase tracking-wider">Live</span>
+        <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Live</span>
       </div>
     </div>
   );
