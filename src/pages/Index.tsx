@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import MainLayout from "@/components/MainLayout";
 import ActionPage from "@/pages/ActionPage";
@@ -8,7 +8,7 @@ import RoundResult from "@/components/RoundResult";
 import { useMiniAppPrompt } from "@/hooks/useMiniAppPrompt";
 import { useNeynarBalances } from "@/hooks/useNeynarBalances";
 import { GamePhase } from "@/components/GameTimer";
-
+import { useSoundEffects } from "@/hooks/useSoundEffects";
 interface Bet {
   id: string;
   direction: "up" | "down";
@@ -22,6 +22,14 @@ const MINIMUM_STAKE = 100000; // 100,000 BLOOM minimum
 const Index = () => {
   // Initialize mini app prompt
   useMiniAppPrompt();
+  
+  // Sound effects
+  const { preloadSounds, playWinSound, playLoseSound, playBetSound } = useSoundEffects();
+  
+  // Preload sounds on mount
+  useEffect(() => {
+    preloadSounds();
+  }, [preloadSounds]);
   
   // Wallet balances via Neynar
   const { ethBalance, bloomBalance } = useNeynarBalances();
@@ -119,6 +127,9 @@ const Index = () => {
     }
 
     setCurrentBet({ direction, amount });
+    
+    // Play bet sound
+    playBetSound();
 
     // Update odds dynamically
     if (direction === "up") {
@@ -169,7 +180,10 @@ const Index = () => {
 
       if (isWin) {
         setWins((prev) => prev + 1);
+        playWinSound();
         // Winner gets 2x payout instantly (simulated - actual contract does this)
+      } else {
+        playLoseSound();
       }
       // Losses and draws - funds stay in contract (house wins)
 
@@ -193,7 +207,7 @@ const Index = () => {
       startPriceRef.current = 0;
       endPriceRef.current = 0;
     }, 2000); // Quick reset for HyperWave pace
-  }, [currentBet, currentPrice]);
+  }, [currentBet, currentPrice, playWinSound, playLoseSound]);
 
   // Calculate if betting is allowed
   const isBettingOpen = currentPhase === "betting";
