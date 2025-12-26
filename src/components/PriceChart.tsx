@@ -69,7 +69,8 @@ const PriceChart = ({ onPriceUpdate }: PriceChartProps) => {
   const gradientId = isPositive ? "chartGradientUp" : "chartGradientDown";
   const strokeColor = isPositive ? "hsl(145, 100%, 45%)" : "hsl(350, 100%, 55%)";
 
-  if (isLoading) {
+  // Only show loading for initial load, not during errors
+  if (isLoading && priceHistory.length === 0) {
     return (
       <div className="relative w-full h-48 sm:h-56 md:h-64 overflow-hidden rounded-xl glass flex items-center justify-center">
         <div className="flex flex-col items-center gap-2">
@@ -80,11 +81,13 @@ const PriceChart = ({ onPriceUpdate }: PriceChartProps) => {
     );
   }
 
-  if (error && price === 0) {
+  // Only show error if we have no data at all
+  if (error && price === 0 && priceHistory.length === 0) {
     return (
       <div className="relative w-full h-48 sm:h-56 md:h-64 overflow-hidden rounded-xl glass flex items-center justify-center">
         <div className="flex flex-col items-center gap-2 text-danger">
           <span className="text-xs">{error}</span>
+          <span className="text-xs text-muted-foreground">Retrying...</span>
         </div>
       </div>
     );
