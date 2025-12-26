@@ -14,7 +14,6 @@
     "@farcaster/miniapp-sdk": "^0.2.1",
     "@fontsource/orbitron": "^5.2.8",
     "@hookform/resolvers": "^3.10.0",
-    "@neynar/react": "^1.2.22",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-aspect-ratio": "^1.1.7",
