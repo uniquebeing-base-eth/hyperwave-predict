@@ -1,52 +1,21 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { TrendingUp, TrendingDown } from "lucide-react";
-
-interface PricePoint {
-  time: number;
-  price: number;
-}
+import { TrendingUp, TrendingDown, Loader2 } from "lucide-react";
+import { useEthPrice } from "@/hooks/useEthPrice";
 
 interface PriceChartProps {
-  currentPrice: number;
-  priceChange: number;
+  onPriceUpdate?: (price: number, change: number) => void;
 }
 
-const PriceChart = ({ currentPrice, priceChange }: PriceChartProps) => {
-  const [priceHistory, setPriceHistory] = useState<PricePoint[]>([]);
+const PriceChart = ({ onPriceUpdate }: PriceChartProps) => {
+  const { price, change24h, priceHistory, isLoading, error } = useEthPrice();
   
-  // Generate initial price history
+  // Notify parent of price updates
   useEffect(() => {
-    const initialHistory: PricePoint[] = [];
-    let basePrice = currentPrice;
-    for (let i = 59; i >= 0; i--) {
-      const variance = (Math.random() - 0.5) * 0.0005 * basePrice;
-      basePrice = basePrice + variance;
-      initialHistory.push({
-        time: Date.now() - i * 1000,
-        price: basePrice,
-      });
+    if (price > 0 && onPriceUpdate) {
+      onPriceUpdate(price, change24h);
     }
-    setPriceHistory(initialHistory);
-  }, []);
-
-  // Update price history every second
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPriceHistory((prev) => {
-        const newHistory = [...prev.slice(1)];
-        const lastPrice = prev[prev.length - 1]?.price || currentPrice;
-        const variance = (Math.random() - 0.5) * 0.0003 * lastPrice;
-        newHistory.push({
-          time: Date.now(),
-          price: lastPrice + variance,
-        });
-        return newHistory;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [currentPrice]);
+  }, [price, change24h, onPriceUpdate]);
 
   // Calculate chart dimensions and path
   const chartPath = useMemo(() => {
@@ -86,9 +55,41 @@ const PriceChart = ({ currentPrice, priceChange }: PriceChartProps) => {
     return `${chartPath} L 95 100 L 5 100 Z`;
   }, [chartPath]);
 
-  const isPositive = priceChange >= 0;
+  const lastY = useMemo(() => {
+    if (priceHistory.length === 0) return 50;
+    const prices = priceHistory.map((p) => p.price);
+    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices);
+    const priceRange = maxPrice - minPrice || 1;
+    const lastPrice = priceHistory[priceHistory.length - 1].price;
+    return 100 - 5 - ((lastPrice - minPrice) / priceRange) * 90;
+  }, [priceHistory]);
+
+  const isPositive = change24h >= 0;
   const gradientId = isPositive ? "chartGradientUp" : "chartGradientDown";
   const strokeColor = isPositive ? "hsl(145, 100%, 45%)" : "hsl(350, 100%, 55%)";
+
+  if (isLoading) {
+    return (
+      <div className="relative w-full h-64 md:h-80 overflow-hidden rounded-2xl glass flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">Loading ETH price...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && price === 0) {
+    return (
+      <div className="relative w-full h-64 md:h-80 overflow-hidden rounded-2xl glass flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-danger">
+          <span className="text-sm">{error}</span>
+          <span className="text-xs text-muted-foreground">Using demo data</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-full h-64 md:h-80 overflow-hidden rounded-2xl glass">
@@ -156,14 +157,7 @@ const PriceChart = ({ currentPrice, priceChange }: PriceChartProps) => {
         {priceHistory.length > 0 && (
           <motion.circle
             cx="95"
-            cy={(() => {
-              const prices = priceHistory.map((p) => p.price);
-              const minPrice = Math.min(...prices);
-              const maxPrice = Math.max(...prices);
-              const priceRange = maxPrice - minPrice || 1;
-              const lastPrice = priceHistory[priceHistory.length - 1].price;
-              return 100 - 5 - ((lastPrice - minPrice) / priceRange) * 90;
-            })()}
+            cy={lastY}
             r="1.5"
             fill={strokeColor}
             filter="url(#glow)"
@@ -180,7 +174,7 @@ const PriceChart = ({ currentPrice, priceChange }: PriceChartProps) => {
         </div>
         <div className="flex items-baseline gap-3">
           <span className="text-3xl md:text-4xl font-display font-bold text-foreground">
-            ${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
           <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-sm font-semibold ${
             isPositive 
@@ -188,7 +182,7 @@ const PriceChart = ({ currentPrice, priceChange }: PriceChartProps) => {
               : "bg-danger/20 text-danger"
           }`}>
             {isPositive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-            <span>{isPositive ? "+" : ""}{priceChange.toFixed(4)}%</span>
+            <span>{isPositive ? "+" : ""}{change24h.toFixed(2)}%</span>
           </div>
         </div>
       </div>
