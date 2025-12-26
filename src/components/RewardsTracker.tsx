@@ -90,19 +90,17 @@ const RewardsTracker = ({
           />
         </div>
 
-        {/* Day markers */}
+        {/* Day markers - no numbers, just dots */}
         <div className="flex justify-between mt-2">
           {Array.from({ length: daysRequired }).map((_, i) => (
             <div
               key={i}
-              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-display
+              className={`w-5 h-5 rounded-full flex items-center justify-center
                 ${i < daysPlayed 
-                  ? 'bg-primary/20 text-primary border border-primary/40' 
-                  : 'bg-muted/50 text-muted-foreground border border-muted'
+                  ? 'bg-primary border border-primary/60 shadow-[0_0_8px_hsl(var(--primary)/0.5)]' 
+                  : 'bg-muted/30 border border-muted'
                 }`}
-            >
-              {i + 1}
-            </div>
+            />
           ))}
         </div>
       </div>
