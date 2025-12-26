@@ -165,7 +165,7 @@ const Index = () => {
       const isDraw = result === "draw";
 
       setTotalBets((prev) => prev + 1);
-      setRewards((prev) => prev + 10); // Base reward for playing (tracked separately)
+      setRewards((prev) => prev + 1000); // 1000 BLOOM reward for playing
 
       if (isWin) {
         setWins((prev) => prev + 1);
