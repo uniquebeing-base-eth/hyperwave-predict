@@ -47,9 +47,9 @@ export const useEthPrice = () => {
 
   const fetchPriceHistory = useCallback(async () => {
     try {
-      // Fetch last 1 hour of data with minute intervals
+      // Use 2 days without interval param - CoinGecko auto-returns hourly data for 2-90 day range
       const response = await fetch(
-        `${COINGECKO_API}/coins/ethereum/market_chart?vs_currency=usd&days=1&interval=hourly`
+        `${COINGECKO_API}/coins/ethereum/market_chart?vs_currency=usd&days=2`
       );
       
       if (!response.ok) {
@@ -59,8 +59,8 @@ export const useEthPrice = () => {
       const result = await response.json();
       
       if (result.prices && result.prices.length > 0) {
-        // Take last 60 data points
-        const recentPrices = result.prices.slice(-60).map((point: [number, number]) => ({
+        // Take last 24 data points for display
+        const recentPrices = result.prices.slice(-24).map((point: [number, number]) => ({
           time: point[0],
           price: point[1],
         }));
