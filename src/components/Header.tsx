@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { Zap, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useFarcaster } from "@/contexts/FarcasterContext";
 
 interface HeaderProps {
   balance: number;
@@ -8,6 +9,13 @@ interface HeaderProps {
 }
 
 const Header = ({ balance, isConnected }: HeaderProps) => {
+  const { user, isAuthenticated, isInMiniApp } = useFarcaster();
+
+  // Use Farcaster user if available, otherwise fall back to isConnected prop
+  const showConnected = isInMiniApp ? isAuthenticated : isConnected;
+  const displayName = user?.displayName || user?.username || "User";
+  const pfpUrl = user?.pfpUrl;
+
   return (
     <motion.header
       className="fixed top-0 left-0 right-0 z-50 glass border-b border-border/50"
@@ -41,7 +49,7 @@ const Header = ({ balance, isConnected }: HeaderProps) => {
 
         {/* User Info */}
         <div className="flex items-center gap-4">
-          {isConnected ? (
+          {showConnected ? (
             <motion.div
               className="flex items-center gap-3 px-4 py-2 rounded-xl glass"
               initial={{ opacity: 0, x: 20 }}
@@ -53,9 +61,17 @@ const Header = ({ balance, isConnected }: HeaderProps) => {
                   {balance.toLocaleString()} <span className="text-xs">ETH</span>
                 </p>
               </div>
-              <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center">
-                <Wallet className="w-5 h-5 text-primary-foreground" />
-              </div>
+              {pfpUrl ? (
+                <img
+                  src={pfpUrl}
+                  alt={displayName}
+                  className="w-10 h-10 rounded-full border-2 border-primary/50"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center">
+                  <Wallet className="w-5 h-5 text-primary-foreground" />
+                </div>
+              )}
             </motion.div>
           ) : (
             <Button variant="neon" size="sm">
