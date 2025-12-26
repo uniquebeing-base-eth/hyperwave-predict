@@ -111,6 +111,11 @@ const Index = () => {
   }, [currentPrice]);
 
   const handlePlaceBet = (direction: "up" | "down", amount: number) => {
+    // Check if user already placed a bet this round
+    if (currentBet !== null) {
+      return;
+    }
+    
     // Check minimum stake
     if (amount < MINIMUM_STAKE) {
       return;
