@@ -145,7 +145,7 @@ const RoundResult = ({
               transition={{ delay: 0.5 }}
             >
               <p className="text-sm text-primary">
-                +10 reward tokens earned! 🎁
+                +1,000 $BLOOM reward earned! 🎁
               </p>
               <p className="text-xs text-muted-foreground">
                 Claim after 7-day streak
