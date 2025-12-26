@@ -1,12 +1,9 @@
 import { useState, useCallback } from "react";
-import { motion } from "framer-motion";
-import Header from "@/components/Header";
-import PriceChart from "@/components/PriceChart";
-import CountdownTimer from "@/components/CountdownTimer";
-import BettingPanel from "@/components/BettingPanel";
-import PhaseTracker from "@/components/PhaseTracker";
-import UserStats from "@/components/UserStats";
-import RecentBets from "@/components/RecentBets";
+import { Routes, Route } from "react-router-dom";
+import MainLayout from "@/components/MainLayout";
+import ActionPage from "@/pages/ActionPage";
+import RewardsPage from "@/pages/RewardsPage";
+import StatsPage from "@/pages/StatsPage";
 import RoundResult from "@/components/RoundResult";
 
 interface Bet {
@@ -74,7 +71,7 @@ const Index = () => {
     // Simulate result after brief delay
     setTimeout(() => {
       const outcomes: ("up" | "down" | "draw")[] = ["up", "down", "draw"];
-      const result = outcomes[Math.floor(Math.random() * 10) % 3]; // Weighted towards up/down
+      const result = outcomes[Math.floor(Math.random() * 10) % 3];
       setRoundResult(result);
 
       // Calculate change based on result
@@ -83,10 +80,9 @@ const Index = () => {
 
       if (currentBet) {
         const isWin = result === currentBet.direction;
-        const isDraw = result === "draw";
 
         setTotalBets((prev) => prev + 1);
-        setRewards((prev) => prev + 10); // Reward tokens for every bet
+        setRewards((prev) => prev + 10);
 
         if (isWin) {
           setBalance((prev) => prev + currentBet.amount * 2);
@@ -112,7 +108,6 @@ const Index = () => {
       setTimeout(() => {
         setCurrentBet(null);
         setIsBettingOpen(true);
-        // Reset odds slightly
         setUpOdds(50 + Math.floor(Math.random() * 10 - 5));
         setDownOdds(50 - Math.floor(Math.random() * 10 - 5));
       }, 3000);
@@ -120,82 +115,39 @@ const Index = () => {
   }, [currentBet]);
 
   return (
-    <div className="min-h-screen bg-background bg-gradient-hero">
-      <Header balance={balance} isConnected={true} />
-
-      {/* Decorative Background Elements */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <motion.div
-          className="absolute top-1/4 -left-32 w-64 h-64 bg-primary/5 rounded-full blur-3xl"
-          animate={{ x: [0, 50, 0], y: [0, 30, 0] }}
-          transition={{ duration: 10, repeat: Infinity }}
-        />
-        <motion.div
-          className="absolute bottom-1/4 -right-32 w-96 h-96 bg-accent/5 rounded-full blur-3xl"
-          animate={{ x: [0, -50, 0], y: [0, -30, 0] }}
-          transition={{ duration: 12, repeat: Infinity }}
-        />
-      </div>
-
-      <main className="container mx-auto px-4 pt-24 pb-12 relative z-10">
-        {/* Hero Section */}
-        <motion.div
-          className="text-center mb-8"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <h2 className="text-lg md:text-xl font-display uppercase tracking-widest text-muted-foreground mb-2">
-            Round <span className="text-primary text-glow-primary">#1,247</span>
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Predict the next move. Win 2× your stake.
-          </p>
-        </motion.div>
-
-        {/* Main Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column - Stats */}
-          <div className="lg:col-span-3 space-y-6">
-            <UserStats
-              balance={balance}
-              totalBets={totalBets}
-              wins={wins}
-              streak={streak}
-            />
-            <PhaseTracker
-              currentPhase={1}
-              daysRemaining={5}
-              totalRewards={rewards}
-              tokenSymbol="ETH"
-            />
-          </div>
-
-          {/* Center Column - Chart & Timer */}
-          <div className="lg:col-span-6 space-y-6">
-            <PriceChart currentPrice={currentPrice} priceChange={priceChange} />
-            
-            <div className="flex justify-center">
-              <CountdownTimer
-                duration={60}
-                onComplete={handleRoundComplete}
-                isActive={true}
+    <>
+      <MainLayout balance={balance} isConnected={true}>
+        <Routes>
+          <Route
+            index
+            element={
+              <ActionPage
+                balance={balance}
+                currentPrice={currentPrice}
+                priceChange={priceChange}
+                upOdds={upOdds}
+                downOdds={downOdds}
+                isBettingOpen={isBettingOpen}
+                recentBets={recentBets}
+                onPlaceBet={handlePlaceBet}
+                onRoundComplete={handleRoundComplete}
               />
-            </div>
-          </div>
-
-          {/* Right Column - Betting */}
-          <div className="lg:col-span-3 space-y-6">
-            <BettingPanel
-              balance={balance}
-              onPlaceBet={handlePlaceBet}
-              upOdds={upOdds}
-              downOdds={downOdds}
-              isBettingOpen={isBettingOpen}
-            />
-            <RecentBets bets={recentBets} />
-          </div>
-        </div>
-      </main>
+            }
+          />
+          <Route path="rewards" element={<RewardsPage rewards={rewards} />} />
+          <Route
+            path="stats"
+            element={
+              <StatsPage
+                balance={balance}
+                totalBets={totalBets}
+                wins={wins}
+                streak={streak}
+              />
+            }
+          />
+        </Routes>
+      </MainLayout>
 
       {/* Result Modal */}
       <RoundResult
@@ -205,7 +157,7 @@ const Index = () => {
         isVisible={showResult}
         onClose={() => setShowResult(false)}
       />
-    </div>
+    </>
   );
 };
 
