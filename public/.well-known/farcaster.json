@@ -1,0 +1,27 @@
+{
+  "accountAssociation": {
+    "header": "",
+    "payload": "",
+    "signature": ""
+  },
+  "miniapp": {
+    "version": "1",
+    "name": "HyperWave",
+    "iconUrl": "https://hyperwavex.xyz/icon.png",
+    "homeUrl": "https://hyperwavex.xyz",
+    "imageUrl": "https://hyperwavex.xyz/preview.png",
+    "buttonTitle": "⚡ Play Now",
+    "splashImageUrl": "https://hyperwavex.xyz/icon.png",
+    "splashBackgroundColor": "#0a0a12",
+    "subtitle": "Stake. Predict. Win.",
+    "description": "Fast-paced prediction market where you stake tokens to predict crypto price movements. Win 2x payouts and earn rewards!",
+    "primaryCategory": "games",
+    "tags": [
+      "prediction",
+      "crypto",
+      "betting",
+      "trading",
+      "rewards"
+    ]
+  }
+}
