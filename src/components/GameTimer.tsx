@@ -9,20 +9,22 @@ interface GameTimerProps {
   onPriceSnapshot: () => void;
 }
 
+// HyperWave timing: 1-minute rounds
+// 50s betting, 10s locked, then instant resolution
 const BETTING_DURATION = 50; // 50 seconds for betting
-const LOCK_DURATION = 10; // 10 seconds locked
-const RESOLUTION_DURATION = 60; // 60 seconds to resolve
+const LOCK_DURATION = 10; // 10 seconds locked (no bets allowed)
+const TOTAL_ROUND_DURATION = 60; // Full round is 60s
 
 const GameTimer = ({ onPhaseChange, onResolutionComplete, onPriceSnapshot }: GameTimerProps) => {
   const [phase, setPhase] = useState<GamePhase>("betting");
   const [timeLeft, setTimeLeft] = useState(BETTING_DURATION);
-  const hasSnapshotted = useRef(false);
+  const hasResolved = useRef(false);
 
   const getTotalDuration = useCallback(() => {
     switch (phase) {
       case "betting": return BETTING_DURATION;
       case "locked": return LOCK_DURATION;
-      case "resolving": return RESOLUTION_DURATION;
+      case "resolving": return 3; // Just 3s to show result then restart
     }
   }, [phase]);
 
@@ -36,17 +38,18 @@ const GameTimer = ({ onPhaseChange, onResolutionComplete, onPriceSnapshot }: Gam
             onPhaseChange("locked");
             return LOCK_DURATION;
           } else if (phase === "locked") {
+            // Locked period over - take price snapshot and resolve immediately
+            onPriceSnapshot();
             setPhase("resolving");
             onPhaseChange("resolving");
-            hasSnapshotted.current = false;
-            return RESOLUTION_DURATION;
+            hasResolved.current = false;
+            return 3; // Brief resolving display
           } else {
-            // Resolution complete - take price snapshot
-            if (!hasSnapshotted.current) {
-              onPriceSnapshot();
-              hasSnapshotted.current = true;
+            // Resolution complete - instant settlement happened, start new round
+            if (!hasResolved.current) {
+              onResolutionComplete();
+              hasResolved.current = true;
             }
-            onResolutionComplete();
             setPhase("betting");
             onPhaseChange("betting");
             return BETTING_DURATION;
@@ -68,9 +71,9 @@ const GameTimer = ({ onPhaseChange, onResolutionComplete, onPriceSnapshot }: Gam
 
   const getPhaseLabel = () => {
     switch (phase) {
-      case "betting": return timeLeft <= 10 ? "Closing Soon" : "Place Bets";
-      case "locked": return "Bets Locked";
-      case "resolving": return "Checking Price";
+      case "betting": return timeLeft <= 10 ? "Last Chance!" : "Place Bets";
+      case "locked": return "Locked";
+      case "resolving": return "Settling...";
     }
   };
 
@@ -78,9 +81,16 @@ const GameTimer = ({ onPhaseChange, onResolutionComplete, onPriceSnapshot }: Gam
     switch (phase) {
       case "betting": return timeLeft <= 10 ? "hsl(var(--warning))" : "hsl(var(--primary))";
       case "locked": return "hsl(var(--danger))";
-      case "resolving": return "hsl(var(--secondary))";
+      case "resolving": return "hsl(var(--success))";
     }
   };
+
+  // Calculate total round time remaining
+  const totalTimeInRound = phase === "betting" 
+    ? timeLeft 
+    : phase === "locked" 
+      ? timeLeft 
+      : timeLeft;
 
   return (
     <div className="relative flex flex-col items-center">
@@ -164,10 +174,15 @@ const GameTimer = ({ onPhaseChange, onResolutionComplete, onPriceSnapshot }: Gam
 
       {/* Phase Description */}
       <p className="mt-3 text-xs text-muted-foreground text-center max-w-[200px]">
-        {phase === "betting" && "Place your bets now!"}
-        {phase === "locked" && "No more bets allowed"}
-        {phase === "resolving" && "Waiting for price update..."}
+        {phase === "betting" && (timeLeft <= 10 ? "Betting closes in 10s!" : "Bet now - 2× payout!")}
+        {phase === "locked" && "No bets - checking price..."}
+        {phase === "resolving" && "Winners paid instantly!"}
       </p>
+
+      {/* Fixed 2x Payout Badge */}
+      <div className="mt-2 px-3 py-1 rounded-full bg-success/20 border border-success/30">
+        <span className="text-xs font-bold text-success">Fixed 2× Payout</span>
+      </div>
     </div>
   );
 };

@@ -60,11 +60,19 @@ const ActionPage = ({
           Round <span className="text-primary text-glow-primary">#{roundNumber.toLocaleString()}</span>
         </h2>
         <p className="text-sm text-muted-foreground">
-          Predict the next move. Win from the pool.
+          Predict ETH price. <span className="text-success font-bold">Win 2×</span> your stake.
         </p>
-        <p className="text-xs text-muted-foreground/70 mt-1">
-          Min stake: {minimumStake.toLocaleString()} $BLOOM
-        </p>
+        <div className="flex flex-wrap justify-center gap-2 mt-2">
+          <span className="px-2 py-0.5 rounded-full bg-primary/20 text-xs text-primary">
+            Min: {minimumStake.toLocaleString()} $BLOOM
+          </span>
+          <span className="px-2 py-0.5 rounded-full bg-success/20 text-xs text-success">
+            Unlimited bets
+          </span>
+          <span className="px-2 py-0.5 rounded-full bg-warning/20 text-xs text-warning">
+            60s rounds
+          </span>
+        </div>
       </motion.div>
 
       {/* Chart - Now with real ETH prices */}
