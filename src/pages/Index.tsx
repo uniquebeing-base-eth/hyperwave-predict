@@ -1,16 +1,17 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
-import { ethers } from "ethers";
+import { formatUnits, parseUnits } from "viem";
 import MainLayout from "@/components/MainLayout";
 import ActionPage from "@/pages/ActionPage";
 import RewardsPage from "@/pages/RewardsPage";
 import StatsPage from "@/pages/StatsPage";
 import RoundResult from "@/components/RoundResult";
 import { useMiniAppPrompt } from "@/hooks/useMiniAppPrompt";
-import { useBloomBetting } from "@/hooks/useBloomBetting";
+import { useWagmiBetting } from "@/hooks/useWagmiBetting";
 import { useNeynarBalances } from "@/hooks/useNeynarBalances";
 import { GamePhase } from "@/components/GameTimer";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
+
 interface Bet {
   id: string;
   direction: "up" | "down";
@@ -26,7 +27,7 @@ const Index = () => {
   // Sound effects
   const { preloadSounds, playWinSound, playLoseSound, playBetSound } = useSoundEffects();
   
-  // On-chain betting hook
+  // On-chain betting hook using wagmi + Farcaster connector
   const {
     isConnected,
     userAddress,
@@ -41,14 +42,14 @@ const Index = () => {
     connect,
     placeBet: onChainPlaceBet,
     refreshData,
-  } = useBloomBetting();
+  } = useWagmiBetting();
 
   // Farcaster (Neynar) balances for accurate display in mini app
   const neynarBalances = useNeynarBalances();
   const parseLocaleNumber = (value: string) => Number((value || "0").replace(/,/g, ""));
 
-  const bloomBalanceNum = Number(ethers.formatUnits(bloomBalance, bloomDecimals));
-  const minimumStakeNum = Number(ethers.formatUnits(minimumStake, bloomDecimals));
+  const bloomBalanceNum = Number(formatUnits(bloomBalance, bloomDecimals));
+  const minimumStakeNum = Number(formatUnits(minimumStake, bloomDecimals));
 
   const neynarBloomNum = parseLocaleNumber(neynarBalances.bloomBalance);
   const neynarEthNum = Number(neynarBalances.ethBalance || "0");
@@ -134,7 +135,7 @@ const Index = () => {
     }
 
     // Convert to bigint for contract using correct decimals
-    const amountInWei = ethers.parseUnits(amount.toString(), bloomDecimals);
+    const amountInWei = parseUnits(amount.toString(), bloomDecimals);
     
     // Place bet on-chain
     const success = await onChainPlaceBet(direction, amountInWei);

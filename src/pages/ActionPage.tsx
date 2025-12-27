@@ -29,7 +29,7 @@ interface ActionPageProps {
   hasUserBetThisRound?: boolean;
   isPending?: boolean;
   isConnected?: boolean;
-  onConnect?: () => Promise<void>;
+  onConnect?: () => void;
 }
 
 const ActionPage = ({
