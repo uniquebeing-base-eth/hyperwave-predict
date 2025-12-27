@@ -26,6 +26,10 @@ interface ActionPageProps {
   currentPhase: GamePhase;
   roundNumber: number;
   minimumStake: number;
+  hasUserBetThisRound?: boolean;
+  isPending?: boolean;
+  isConnected?: boolean;
+  onConnect?: () => Promise<void>;
 }
 
 const ActionPage = ({
@@ -42,6 +46,10 @@ const ActionPage = ({
   currentPhase,
   roundNumber,
   minimumStake,
+  hasUserBetThisRound = false,
+  isPending = false,
+  isConnected = true,
+  onConnect,
 }: ActionPageProps) => {
   return (
     <motion.div
@@ -67,7 +75,7 @@ const ActionPage = ({
             Min: {minimumStake.toLocaleString()} $BLOOM
           </span>
           <span className="px-2 py-0.5 rounded-full bg-success/20 text-xs text-success">
-            Unlimited bets
+            1 bet per round
           </span>
           <span className="px-2 py-0.5 rounded-full bg-warning/20 text-xs text-warning">
             60s rounds
@@ -87,7 +95,7 @@ const ActionPage = ({
         />
       </div>
 
-      {/* Betting Panel */}
+      {/* Betting Panel - Now with on-chain support */}
       <BettingPanel
         balance={balance}
         onPlaceBet={onPlaceBet}
@@ -95,6 +103,10 @@ const ActionPage = ({
         downOdds={downOdds}
         isBettingOpen={isBettingOpen}
         minimumStake={minimumStake}
+        hasUserBetThisRound={hasUserBetThisRound}
+        isPending={isPending}
+        isConnected={isConnected}
+        onConnect={onConnect}
       />
 
       {/* Recent Bets */}

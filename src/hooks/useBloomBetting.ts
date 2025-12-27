@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ethers, BrowserProvider, Contract } from 'ethers';
+import { sdk } from '@farcaster/miniapp-sdk';
 import { 
   BLOOM_BETTING_ADDRESS, 
   BLOOM_TOKEN_ADDRESS, 
@@ -7,8 +8,7 @@ import {
   ERC20_ABI,
   Direction,
   type Round,
-  type UserStats,
-  type Bet
+  type UserStats
 } from '@/contracts/BloomBetting';
 import { toast } from '@/hooks/use-toast';
 
@@ -62,13 +62,51 @@ export function useBloomBetting(): UseBloomBettingReturn {
     try {
       setIsLoading(true);
       
-      if (!window.ethereum) {
-        toast({ title: "No wallet found", description: "Please install a Web3 wallet", variant: "destructive" });
+      // Try Farcaster provider first (for mini apps)
+      let ethProvider: any = null;
+      
+      try {
+        // Check if we're in a Farcaster mini app
+        const isInMiniApp = await sdk.isInMiniApp();
+        
+        if (isInMiniApp) {
+          // Use Farcaster's ethProvider
+          ethProvider = sdk.wallet.ethProvider;
+          console.log('Using Farcaster ethProvider');
+        }
+      } catch (e) {
+        console.log('Not in Farcaster mini app, falling back to window.ethereum');
+      }
+      
+      // Fallback to window.ethereum if not in mini app
+      if (!ethProvider && window.ethereum) {
+        ethProvider = window.ethereum;
+        console.log('Using window.ethereum');
+      }
+      
+      if (!ethProvider) {
+        toast({ 
+          title: "No wallet found", 
+          description: "Please open this app in Warpcast or install a Web3 wallet", 
+          variant: "destructive" 
+        });
         return;
       }
 
-      const browserProvider = new BrowserProvider(window.ethereum);
+      const browserProvider = new BrowserProvider(ethProvider);
+      
+      // Request accounts
       const accounts = await browserProvider.send("eth_requestAccounts", []);
+      
+      if (!accounts || accounts.length === 0) {
+        toast({ 
+          title: "Connection failed", 
+          description: "No accounts found", 
+          variant: "destructive" 
+        });
+        return;
+      }
+      
       const userSigner = await browserProvider.getSigner();
       
       setProvider(browserProvider);
@@ -76,10 +114,17 @@ export function useBloomBetting(): UseBloomBettingReturn {
       setUserAddress(accounts[0]);
       setIsConnected(true);
       
-      toast({ title: "Connected", description: `Wallet connected: ${accounts[0].slice(0, 6)}...${accounts[0].slice(-4)}` });
+      toast({ 
+        title: "Wallet Connected", 
+        description: `${accounts[0].slice(0, 6)}...${accounts[0].slice(-4)}` 
+      });
     } catch (error: any) {
       console.error("Connection error:", error);
-      toast({ title: "Connection failed", description: error.message, variant: "destructive" });
+      toast({ 
+        title: "Connection failed", 
+        description: error.message || "Failed to connect wallet", 
+        variant: "destructive" 
+      });
     } finally {
       setIsLoading(false);
     }
@@ -151,14 +196,20 @@ export function useBloomBetting(): UseBloomBettingReturn {
 
     try {
       setIsPending(true);
+      toast({ title: "Approving BLOOM...", description: "Please confirm in your wallet" });
+      
       const tx = await contracts.tokenContract.approve(BLOOM_BETTING_ADDRESS, amount);
-      toast({ title: "Approving tokens...", description: "Please wait for confirmation" });
       await tx.wait();
-      toast({ title: "Tokens approved", description: "You can now place your bet" });
+      
+      toast({ title: "Approved!", description: "You can now place your bet" });
       return true;
     } catch (error: any) {
       console.error("Approval error:", error);
-      toast({ title: "Approval failed", description: error.reason || error.message, variant: "destructive" });
+      toast({ 
+        title: "Approval failed", 
+        description: error.reason || error.message || "Transaction rejected", 
+        variant: "destructive" 
+      });
       return false;
     } finally {
       setIsPending(false);
@@ -168,7 +219,11 @@ export function useBloomBetting(): UseBloomBettingReturn {
   const placeBet = useCallback(async (direction: 'up' | 'down', amount: bigint): Promise<boolean> => {
     const contracts = getContracts();
     if (!contracts || !userAddress) {
-      toast({ title: "Not connected", description: "Please connect your wallet first", variant: "destructive" });
+      toast({ 
+        title: "Not connected", 
+        description: "Please connect your wallet first", 
+        variant: "destructive" 
+      });
       return false;
     }
 
@@ -178,35 +233,51 @@ export function useBloomBetting(): UseBloomBettingReturn {
       // Check allowance first
       const allowance = await getAllowance();
       if (allowance < amount) {
+        toast({ title: "Approval needed", description: "Approving BLOOM tokens..." });
         const approved = await approveTokens(amount);
         if (!approved) return false;
       }
 
       const directionEnum = direction === 'up' ? Direction.Up : Direction.Down;
-      const tx = await contracts.bettingContract.placeBet(directionEnum, amount);
       
-      toast({ title: "Placing bet...", description: "Please wait for confirmation" });
+      toast({ title: "Placing bet...", description: "Please confirm in your wallet" });
+      
+      const tx = await contracts.bettingContract.placeBet(directionEnum, amount);
       await tx.wait();
       
-      toast({ title: "Bet placed!", description: `You bet ${ethers.formatEther(amount)} BLOOM on ${direction.toUpperCase()}` });
+      toast({ 
+        title: "Bet placed!", 
+        description: `${ethers.formatEther(amount)} BLOOM on ${direction.toUpperCase()}` 
+      });
       
       await refreshData();
       return true;
     } catch (error: any) {
       console.error("Bet error:", error);
       const message = error.reason || error.message || "Transaction failed";
-      toast({ title: "Bet failed", description: message, variant: "destructive" });
+      toast({ 
+        title: "Bet failed", 
+        description: message, 
+        variant: "destructive" 
+      });
       return false;
     } finally {
       setIsPending(false);
     }
   }, [getContracts, userAddress, getAllowance, approveTokens, refreshData]);
 
-  // Auto-connect if wallet was previously connected
+  // Auto-connect on mount
   useEffect(() => {
-    const checkConnection = async () => {
-      if (window.ethereum) {
-        try {
+    const autoConnect = async () => {
+      try {
+        // Check if in Farcaster mini app
+        const isInMiniApp = await sdk.isInMiniApp();
+        
+        if (isInMiniApp) {
+          // Auto-connect in Farcaster
+          await connect();
+        } else if (window.ethereum) {
+          // Check if already connected
           const browserProvider = new BrowserProvider(window.ethereum);
           const accounts = await browserProvider.listAccounts();
           if (accounts.length > 0) {
@@ -216,13 +287,14 @@ export function useBloomBetting(): UseBloomBettingReturn {
             setUserAddress(await userSigner.getAddress());
             setIsConnected(true);
           }
-        } catch (error) {
-          console.error("Auto-connect check failed:", error);
         }
+      } catch (error) {
+        console.log("Auto-connect failed:", error);
       }
     };
-    checkConnection();
-  }, []);
+    
+    autoConnect();
+  }, [connect]);
 
   // Refresh data when connected
   useEffect(() => {
@@ -232,24 +304,6 @@ export function useBloomBetting(): UseBloomBettingReturn {
       return () => clearInterval(interval);
     }
   }, [isConnected, userAddress, refreshData]);
-
-  // Listen for account changes
-  useEffect(() => {
-    if (window.ethereum) {
-      const handleAccountsChanged = (accounts: string[]) => {
-        if (accounts.length === 0) {
-          setIsConnected(false);
-          setUserAddress(null);
-          setSigner(null);
-        } else {
-          setUserAddress(accounts[0]);
-        }
-      };
-
-      window.ethereum.on('accountsChanged', handleAccountsChanged);
-      return () => window.ethereum?.removeListener('accountsChanged', handleAccountsChanged);
-    }
-  }, []);
 
   return {
     isConnected,
