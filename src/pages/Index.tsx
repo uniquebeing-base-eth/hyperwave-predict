@@ -53,15 +53,9 @@ const Index = () => {
   const neynarBloomNum = parseLocaleNumber(neynarBalances.bloomBalance);
   const neynarEthNum = Number(neynarBalances.ethBalance || "0");
 
-  // Prefer Neynar-derived balances inside Farcaster mini app when available,
-  // but only if it matches the connected wallet address (to avoid showing the wrong wallet's funds).
-  const isSameWallet =
-    !!userAddress &&
-    !!neynarBalances.address &&
-    userAddress.toLowerCase() === neynarBalances.address.toLowerCase();
-
-  const displayBloomBalanceNum = isSameWallet ? neynarBloomNum : bloomBalanceNum;
-  const displayEthBalanceNum = isSameWallet ? neynarEthNum : 0;
+  // Prefer Neynar-derived balances inside Farcaster mini app when available
+  const displayBloomBalanceNum = neynarBalances.address ? neynarBloomNum : bloomBalanceNum;
+  const displayEthBalanceNum = neynarBalances.address ? neynarEthNum : 0;
   // Preload sounds on mount
   useEffect(() => {
     preloadSounds();
