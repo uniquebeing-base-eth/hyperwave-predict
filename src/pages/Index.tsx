@@ -8,9 +8,9 @@ import StatsPage from "@/pages/StatsPage";
 import RoundResult from "@/components/RoundResult";
 import { useMiniAppPrompt } from "@/hooks/useMiniAppPrompt";
 import { useBloomBetting } from "@/hooks/useBloomBetting";
+import { useNeynarBalances } from "@/hooks/useNeynarBalances";
 import { GamePhase } from "@/components/GameTimer";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
-
 interface Bet {
   id: string;
   direction: "up" | "down";
@@ -40,13 +40,22 @@ const Index = () => {
     isPending,
     connect,
     placeBet: onChainPlaceBet,
-    refreshData
+    refreshData,
   } = useBloomBetting();
-  
-  // Convert bigint to number for display using correct decimals
+
+  // Farcaster (Neynar) balances for accurate display in mini app
+  const neynarBalances = useNeynarBalances();
+  const parseLocaleNumber = (value: string) => Number((value || "0").replace(/,/g, ""));
+
   const bloomBalanceNum = Number(ethers.formatUnits(bloomBalance, bloomDecimals));
   const minimumStakeNum = Number(ethers.formatUnits(minimumStake, bloomDecimals));
-  
+
+  const neynarBloomNum = parseLocaleNumber(neynarBalances.bloomBalance);
+  const neynarEthNum = Number(neynarBalances.ethBalance || "0");
+
+  // Prefer Neynar-derived balances inside Farcaster mini app when available
+  const displayBloomBalanceNum = neynarBalances.address ? neynarBloomNum : bloomBalanceNum;
+  const displayEthBalanceNum = neynarBalances.address ? neynarEthNum : 0;
   // Preload sounds on mount
   useEffect(() => {
     preloadSounds();
@@ -119,8 +128,8 @@ const Index = () => {
       return;
     }
 
-    // Check wallet balance
-    if (amount > bloomBalanceNum) {
+    // Check wallet balance (use Neynar display balance in Farcaster)
+    if (amount > displayBloomBalanceNum) {
       return;
     }
 
@@ -144,7 +153,7 @@ const Index = () => {
       };
       setRecentBets((prev) => [newBet, ...prev.slice(0, 9)]);
     }
-  }, [hasUserBetThisRound, currentBet, currentPhase, bloomBalanceNum, bloomDecimals, onChainPlaceBet, playBetSound]);
+  }, [hasUserBetThisRound, currentBet, currentPhase, displayBloomBalanceNum, bloomDecimals, onChainPlaceBet, playBetSound]);
 
   const handleResolutionComplete = useCallback(() => {
     // Determine result based on price movement
@@ -205,7 +214,7 @@ const Index = () => {
             index
             element={
               <ActionPage
-                balance={bloomBalanceNum}
+                balance={displayBloomBalanceNum}
                 upOdds={upOdds || 50}
                 downOdds={downOdds || 50}
                 isBettingOpen={isBettingOpen}
@@ -230,8 +239,8 @@ const Index = () => {
             path="stats"
             element={
               <StatsPage
-                ethBalance={0}
-                bloomBalance={bloomBalanceNum}
+                ethBalance={displayEthBalanceNum}
+                bloomBalance={displayBloomBalanceNum}
                 totalBets={totalBets}
                 wins={wins}
                 streak={streak}
