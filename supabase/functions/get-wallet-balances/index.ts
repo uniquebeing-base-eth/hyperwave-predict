@@ -9,8 +9,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// ERC20 balanceOf function selector
+// ERC20 selectors
 const BALANCE_OF_SELECTOR = "0x70a08231";
+const DECIMALS_SELECTOR = "0x313ce567";
+
+function formatWithCommas(value: string) {
+  return value.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
 
 async function getEthBalance(address: string): Promise<string> {
   const response = await fetch(BASE_RPC_URL, {
@@ -33,11 +38,40 @@ async function getEthBalance(address: string): Promise<string> {
   return "0";
 }
 
-async function getTokenBalance(tokenAddress: string, walletAddress: string): Promise<string> {
+async function getTokenDecimals(tokenAddress: string): Promise<number> {
+  const response = await fetch(BASE_RPC_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      method: "eth_call",
+      params: [
+        {
+          to: tokenAddress,
+          data: DECIMALS_SELECTOR,
+        },
+        "latest",
+      ],
+      id: 1,
+    }),
+  });
+
+  const data = await response.json();
+  if (data.result && data.result !== "0x") {
+    return Number(BigInt(data.result));
+  }
+  return 18;
+}
+
+async function getTokenBalance(
+  tokenAddress: string,
+  walletAddress: string,
+  decimals: number
+): Promise<string> {
   // Encode the balanceOf call data
   const paddedAddress = walletAddress.slice(2).toLowerCase().padStart(64, "0");
   const callData = BALANCE_OF_SELECTOR + paddedAddress;
-  
+
   const response = await fetch(BASE_RPC_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -54,13 +88,13 @@ async function getTokenBalance(tokenAddress: string, walletAddress: string): Pro
       id: 1,
     }),
   });
-  
+
   const data = await response.json();
   if (data.result && data.result !== "0x") {
     const balanceRaw = BigInt(data.result);
-    // Assuming 18 decimals for BLOOM token
-    const balance = Number(balanceRaw) / 1e18;
-    return Math.floor(balance).toLocaleString("en-US");
+    const divisor = 10n ** BigInt(decimals);
+    const whole = balanceRaw / divisor;
+    return formatWithCommas(whole.toString());
   }
   return "0";
 }
@@ -120,12 +154,13 @@ serve(async (req) => {
       );
     }
     
+    const tokenDecimals = await getTokenDecimals(BLOOM_TOKEN_ADDRESS);
+
     // Fetch balances in parallel
     const [ethBalance, bloomBalance] = await Promise.all([
       getEthBalance(walletAddress),
-      getTokenBalance(BLOOM_TOKEN_ADDRESS, walletAddress),
+      getTokenBalance(BLOOM_TOKEN_ADDRESS, walletAddress, tokenDecimals),
     ]);
-    
     return new Response(
       JSON.stringify({
         ethBalance,
