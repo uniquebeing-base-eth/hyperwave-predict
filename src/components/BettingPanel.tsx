@@ -26,7 +26,7 @@ const BettingPanel = ({
   minimumStake = 100000,
   hasUserBetThisRound = false,
   isPending = false,
-  isConnected = true,
+  isConnected = false,
   onConnect,
 }: BettingPanelProps) => {
   const [betAmount, setBetAmount] = useState<number>(minimumStake);

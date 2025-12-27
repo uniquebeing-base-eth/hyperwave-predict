@@ -48,7 +48,7 @@ const ActionPage = ({
   minimumStake,
   hasUserBetThisRound = false,
   isPending = false,
-  isConnected = true,
+  isConnected = false,
   onConnect,
 }: ActionPageProps) => {
   return (

@@ -1,227 +1,219 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { ethers, BrowserProvider, Contract, JsonRpcSigner } from 'ethers';
-import { sdk } from '@farcaster/miniapp-sdk';
-import { 
-  BLOOM_BETTING_ADDRESS, 
-  BLOOM_TOKEN_ADDRESS, 
-  BLOOM_BETTING_ABI, 
-  ERC20_ABI,
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BrowserProvider, Contract, Interface, ethers } from "ethers";
+import { sdk } from "@farcaster/miniapp-sdk";
+import {
+  BLOOM_BETTING_ABI,
+  BLOOM_BETTING_ADDRESS,
+  BLOOM_TOKEN_ADDRESS,
   Direction,
+  ERC20_ABI,
   type Round,
-  type UserStats
-} from '@/contracts/BloomBetting';
-import { toast } from '@/hooks/use-toast';
+  type UserStats,
+} from "@/contracts/BloomBetting";
+import { toast } from "@/hooks/use-toast";
 
-// Base Mainnet chain ID
 const BASE_CHAIN_ID = 8453;
-const BASE_CHAIN_ID_HEX = '0x2105';
+const BASE_CHAIN_ID_HEX = "0x2105";
+
+type Eip1193Provider = {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+};
 
 interface UseBloomBettingReturn {
-  // State
   isConnected: boolean;
   userAddress: string | null;
+
   bloomBalance: bigint;
   bloomDecimals: number;
+
   currentRound: Round | null;
   userStats: UserStats | null;
   hasUserBetThisRound: boolean;
   isBettingOpen: boolean;
   timeRemaining: number;
   minimumStake: bigint;
+
   isLoading: boolean;
   isPending: boolean;
-  
-  // Actions
+
   connect: () => Promise<void>;
-  placeBet: (direction: 'up' | 'down', amount: bigint) => Promise<boolean>;
+  placeBet: (direction: "up" | "down", amount: bigint) => Promise<boolean>;
   approveTokens: (amount: bigint) => Promise<boolean>;
   getAllowance: () => Promise<bigint>;
   refreshData: () => Promise<void>;
 }
 
 export function useBloomBetting(): UseBloomBettingReturn {
+  const [ethProvider, setEthProvider] = useState<Eip1193Provider | null>(null);
   const [provider, setProvider] = useState<BrowserProvider | null>(null);
-  const [signer, setSigner] = useState<JsonRpcSigner | null>(null);
   const [userAddress, setUserAddress] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+
   const [bloomBalance, setBloomBalance] = useState<bigint>(0n);
-  const [bloomDecimals, setBloomDecimals] = useState<number>(18);
+  const [bloomDecimals, setBloomDecimals] = useState(18);
+
   const [currentRound, setCurrentRound] = useState<Round | null>(null);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [hasUserBetThisRound, setHasUserBetThisRound] = useState(false);
   const [isBettingOpen, setIsBettingOpen] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [minimumStake, setMinimumStake] = useState<bigint>(0n);
+
   const [isLoading, setIsLoading] = useState(false);
   const [isPending, setIsPending] = useState(false);
-  
-  const isConnecting = useRef(false);
-  const hasInitialized = useRef(false);
-  const ethProviderRef = useRef<any>(null);
 
-  const getContracts = useCallback((signerOrProvider: JsonRpcSigner | BrowserProvider) => {
-    const bettingContract = new Contract(BLOOM_BETTING_ADDRESS, BLOOM_BETTING_ABI, signerOrProvider);
-    const tokenContract = new Contract(BLOOM_TOKEN_ADDRESS, ERC20_ABI, signerOrProvider);
-    
-    return { bettingContract, tokenContract };
+  const isConnectingRef = useRef(false);
+
+  const tokenIface = useMemo(() => new Interface(ERC20_ABI as any), []);
+  const bettingIface = useMemo(() => new Interface(BLOOM_BETTING_ABI as any), []);
+
+  const getReadContracts = useCallback(
+    (p: BrowserProvider) => {
+      return {
+        token: new Contract(BLOOM_TOKEN_ADDRESS, ERC20_ABI, p),
+        betting: new Contract(BLOOM_BETTING_ADDRESS, BLOOM_BETTING_ABI, p),
+      };
+    },
+    []
+  );
+
+  const ensureBase = useCallback(async (p: Eip1193Provider) => {
+    try {
+      const chainIdHex = (await p.request({ method: "eth_chainId" })) as string;
+      const chainId = parseInt(chainIdHex, 16);
+      if (chainId === BASE_CHAIN_ID) return;
+
+      await p.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: BASE_CHAIN_ID_HEX }],
+      });
+    } catch {
+      // In Warpcast, chain switching may be managed by the wallet; failing here shouldn't block.
+    }
+  }, []);
+
+  const resolveEthProvider = useCallback(async (): Promise<Eip1193Provider | null> => {
+    try {
+      const inMiniApp = await sdk.isInMiniApp();
+      if (inMiniApp) {
+        const p = (await sdk.wallet.getEthereumProvider()) as any;
+        return (p ?? sdk.wallet.ethProvider) as any;
+      }
+    } catch {
+      // ignore
+    }
+
+    if (typeof window !== "undefined" && (window as any).ethereum) {
+      return (window as any).ethereum as any;
+    }
+
+    return null;
   }, []);
 
   const connect = useCallback(async () => {
-    if (isConnecting.current) return;
-    isConnecting.current = true;
-    
+    if (isConnectingRef.current) return;
+    isConnectingRef.current = true;
+
     try {
       setIsLoading(true);
-      
-      let ethProvider: any = null;
-      
-      // Check if we're in Farcaster mini app
-      try {
-        const inMiniApp = await sdk.isInMiniApp();
-        console.log('Is in Mini App:', inMiniApp);
-        
-        if (inMiniApp) {
-          // Get the Farcaster ethProvider directly from sdk.wallet
-          ethProvider = sdk.wallet.ethProvider;
-          console.log('Got Farcaster ethProvider:', !!ethProvider);
-        }
-      } catch (e) {
-        console.log('Farcaster SDK check failed:', e);
-      }
-      
-      // Fallback to window.ethereum
-      if (!ethProvider && typeof window !== 'undefined' && window.ethereum) {
-        ethProvider = window.ethereum;
-        console.log('Using window.ethereum');
-      }
-      
-      if (!ethProvider) {
-        toast({ 
-          title: "No wallet found", 
-          description: "Please open this app in Warpcast", 
-          variant: "destructive" 
+
+      const p = await resolveEthProvider();
+      if (!p) {
+        toast({
+          title: "No wallet found",
+          description: "Open this mini app in Warpcast to use the wallet.",
+          variant: "destructive",
         });
         return;
       }
 
-      // Store the provider for later use
-      ethProviderRef.current = ethProvider;
+      setEthProvider(p);
 
-      // Request accounts - this triggers the Farcaster wallet connection
-      console.log('Requesting eth_requestAccounts...');
-      let accounts: string[];
-      
-      try {
-        accounts = await ethProvider.request({ 
-          method: 'eth_requestAccounts',
-          params: []
-        }) as string[];
-        console.log('Accounts received:', accounts);
-      } catch (reqError: any) {
-        console.error('Request accounts error:', reqError);
-        toast({ 
-          title: "Connection rejected", 
-          description: "Please approve the connection request", 
-          variant: "destructive" 
-        });
-        return;
-      }
-      
-      if (!accounts || accounts.length === 0) {
-        toast({ 
-          title: "No accounts", 
-          description: "No accounts found in wallet", 
-          variant: "destructive" 
+      await ensureBase(p);
+
+      const accounts = (await p.request({
+        method: "eth_requestAccounts",
+        params: [],
+      })) as string[];
+
+      const address = accounts?.[0];
+      if (!address) {
+        toast({
+          title: "Connection failed",
+          description: "No account returned by wallet.",
+          variant: "destructive",
         });
         return;
       }
 
-      // Check current chain
-      const chainIdHex = await ethProvider.request({ method: 'eth_chainId' });
-      const chainId = parseInt(chainIdHex as string, 16);
-      console.log('Current chain ID:', chainId);
-      
-      // Switch to Base if needed
-      if (chainId !== BASE_CHAIN_ID) {
-        console.log('Switching to Base...');
-        try {
-          await ethProvider.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: BASE_CHAIN_ID_HEX }],
-          });
-          console.log('Switched to Base');
-        } catch (switchError: any) {
-          console.error('Chain switch error:', switchError);
-          // In Farcaster, if the chain switch fails, we might still be able to continue
-          // as Farcaster handles multi-chain
-        }
-      }
-
-      // Create provider and signer using ethers
-      const browserProvider = new BrowserProvider(ethProvider);
-      const userSigner = await browserProvider.getSigner();
-      const address = await userSigner.getAddress();
-      
-      console.log('Connected address:', address);
-      
-      setProvider(browserProvider);
-      setSigner(userSigner);
+      const bp = new BrowserProvider(p as any);
+      setProvider(bp);
       setUserAddress(address);
       setIsConnected(true);
-      
-      toast({ 
-        title: "Wallet Connected", 
-        description: `${address.slice(0, 6)}...${address.slice(-4)}` 
+
+      toast({
+        title: "Wallet Connected",
+        description: `${address.slice(0, 6)}...${address.slice(-4)}`,
       });
-      
-    } catch (error: any) {
-      console.error("Connection error:", error);
-      toast({ 
-        title: "Connection failed", 
-        description: error.message || "Failed to connect wallet", 
-        variant: "destructive" 
+    } catch (e: any) {
+      toast({
+        title: "Connection failed",
+        description: e?.message ?? "Failed to connect",
+        variant: "destructive",
       });
     } finally {
       setIsLoading(false);
-      isConnecting.current = false;
+      isConnectingRef.current = false;
     }
-  }, []);
+  }, [ensureBase, resolveEthProvider]);
+
+  const sendTx = useCallback(
+    async (params: { to: string; data: string; value?: string }) => {
+      if (!ethProvider || !userAddress) throw new Error("Wallet not connected");
+
+      // This is the *Farcaster-native* flow: the wallet handles gas/estimation/UI.
+      const txHash = (await ethProvider.request({
+        method: "eth_sendTransaction",
+        params: [
+          {
+            from: userAddress,
+            to: params.to,
+            data: params.data,
+            value: params.value ?? "0x0",
+          },
+        ],
+      })) as string;
+
+      return txHash;
+    },
+    [ethProvider, userAddress]
+  );
 
   const refreshData = useCallback(async () => {
-    if (!signer || !userAddress) {
-      console.log('Cannot refresh: no signer or address');
-      return;
-    }
+    if (!provider || !userAddress) return;
 
     try {
-      const contracts = getContracts(signer);
-      const { bettingContract, tokenContract } = contracts;
-      
-      // Get token decimals first
-      let decimals = 18;
-      try {
-        decimals = await tokenContract.decimals();
-        setBloomDecimals(decimals);
-      } catch (e) {
-        console.log('Could not get decimals, using 18');
-      }
-      
-      // Fetch all data in parallel
+      const { token, betting } = getReadContracts(provider);
+
+      const decimals = (await token.decimals().catch(() => 18)) as number;
+      setBloomDecimals(decimals);
+
       const [balance, round, stats, hasBet, bettingOpen, remaining, minStake] = await Promise.all([
-        tokenContract.balanceOf(userAddress),
-        bettingContract.getCurrentRound().catch(() => null),
-        bettingContract.getUserStats(userAddress).catch(() => null),
-        bettingContract.hasUserBetThisRound(userAddress).catch(() => false),
-        bettingContract.isBettingOpen().catch(() => false),
-        bettingContract.getTimeRemaining().catch(() => 0n),
-        bettingContract.minimumStake().catch(() => 0n)
+        token.balanceOf(userAddress),
+        betting.getCurrentRound().catch(() => null),
+        betting.getUserStats(userAddress).catch(() => null),
+        betting.hasUserBetThisRound(userAddress).catch(() => false),
+        betting.isBettingOpen().catch(() => false),
+        betting.getTimeRemaining().catch(() => 0n),
+        betting.minimumStake().catch(() => 0n),
       ]);
 
-      console.log('BLOOM Balance (raw):', balance.toString());
-      console.log('BLOOM Balance (formatted):', ethers.formatUnits(balance, decimals));
-      
       setBloomBalance(balance);
-      
+      setHasUserBetThisRound(Boolean(hasBet));
+      setIsBettingOpen(Boolean(bettingOpen));
+      setTimeRemaining(Number(remaining));
+      setMinimumStake(minStake);
+
       if (round) {
         setCurrentRound({
           roundId: round.roundId,
@@ -232,10 +224,10 @@ export function useBloomBetting(): UseBloomBettingReturn {
           totalUpPool: round.totalUpPool,
           totalDownPool: round.totalDownPool,
           result: round.result,
-          resolved: round.resolved
+          resolved: round.resolved,
         });
       }
-      
+
       if (stats) {
         setUserStats({
           totalBets: stats.totalBets,
@@ -244,194 +236,145 @@ export function useBloomBetting(): UseBloomBettingReturn {
           totalStaked: stats.totalStaked,
           totalProfits: stats.totalProfits,
           currentStreak: stats.currentStreak,
-          lastPlayedDay: stats.lastPlayedDay
+          lastPlayedDay: stats.lastPlayedDay,
         });
       }
-      
-      setHasUserBetThisRound(hasBet);
-      setIsBettingOpen(bettingOpen);
-      setTimeRemaining(Number(remaining));
-      setMinimumStake(minStake);
-    } catch (error) {
-      console.error("Error refreshing data:", error);
+    } catch (e) {
+      console.error("refreshData failed", e);
     }
-  }, [getContracts, signer, userAddress]);
+  }, [getReadContracts, provider, userAddress]);
 
   const getAllowance = useCallback(async (): Promise<bigint> => {
-    if (!signer || !userAddress) return 0n;
-    
-    try {
-      const { tokenContract } = getContracts(signer);
-      const allowance = await tokenContract.allowance(userAddress, BLOOM_BETTING_ADDRESS);
-      console.log('Current allowance:', allowance.toString());
-      return allowance;
-    } catch (error) {
-      console.error("Error getting allowance:", error);
-      return 0n;
-    }
-  }, [getContracts, signer, userAddress]);
+    if (!provider || !userAddress) return 0n;
+    const { token } = getReadContracts(provider);
+    return token.allowance(userAddress, BLOOM_BETTING_ADDRESS).catch(() => 0n);
+  }, [getReadContracts, provider, userAddress]);
 
-  const approveTokens = useCallback(async (amount: bigint): Promise<boolean> => {
-    if (!signer) return false;
-
-    try {
-      setIsPending(true);
-      toast({ title: "Approving BLOOM...", description: "Please confirm in your wallet" });
-      
-      const { tokenContract } = getContracts(signer);
-      
-      // Approve max amount to avoid repeated approvals
-      const maxApproval = ethers.MaxUint256;
-      
-      console.log('Sending approve transaction...');
-      const tx = await tokenContract.approve(BLOOM_BETTING_ADDRESS, maxApproval);
-      console.log('Approval tx hash:', tx.hash);
-      
-      toast({ title: "Transaction Sent", description: "Waiting for confirmation..." });
-      
-      const receipt = await tx.wait();
-      console.log('Approval confirmed:', receipt);
-      
-      toast({ title: "Approved!", description: "You can now place your bet" });
-      return true;
-    } catch (error: any) {
-      console.error("Approval error:", error);
-      const msg = error.reason || error.shortMessage || error.message || "Transaction rejected";
-      toast({ 
-        title: "Approval failed", 
-        description: msg, 
-        variant: "destructive" 
-      });
-      return false;
-    } finally {
-      setIsPending(false);
-    }
-  }, [getContracts, signer]);
-
-  const placeBet = useCallback(async (direction: 'up' | 'down', amount: bigint): Promise<boolean> => {
-    if (!signer || !userAddress) {
-      toast({ 
-        title: "Not connected", 
-        description: "Please connect your wallet first", 
-        variant: "destructive" 
-      });
-      return false;
-    }
-
-    try {
-      setIsPending(true);
-      
-      const { tokenContract, bettingContract } = getContracts(signer);
-      
-      // Check balance
-      const balance = await tokenContract.balanceOf(userAddress);
-      console.log('Balance check:', balance.toString(), 'vs bet:', amount.toString());
-      
-      if (balance < amount) {
-        const balanceFormatted = ethers.formatUnits(balance, bloomDecimals);
-        const amountFormatted = ethers.formatUnits(amount, bloomDecimals);
-        toast({ 
-          title: "Insufficient Balance", 
-          description: `You have ${Number(balanceFormatted).toLocaleString()} BLOOM but need ${Number(amountFormatted).toLocaleString()}`, 
-          variant: "destructive" 
-        });
+  const approveTokens = useCallback(
+    async (_amount: bigint): Promise<boolean> => {
+      if (!provider || !userAddress) {
+        toast({ title: "Not connected", description: "Connect wallet first", variant: "destructive" });
         return false;
       }
 
-      // Check allowance
-      const allowance = await getAllowance();
-      console.log('Allowance check:', allowance.toString(), 'vs bet:', amount.toString());
-      
-      if (allowance < amount) {
-        toast({ title: "Approval needed", description: "Approving BLOOM tokens..." });
-        const approved = await approveTokens(amount);
-        if (!approved) return false;
-      }
-
-      const directionEnum = direction === 'up' ? Direction.Up : Direction.Down;
-      
-      toast({ title: "Placing bet...", description: "Please confirm in your wallet" });
-      
-      console.log('Calling placeBet:', directionEnum, amount.toString());
-      const tx = await bettingContract.placeBet(directionEnum, amount);
-      console.log('Bet tx hash:', tx.hash);
-      
-      toast({ title: "Transaction Sent", description: "Waiting for confirmation..." });
-      
-      const receipt = await tx.wait();
-      console.log('Bet confirmed:', receipt);
-      
-      const amountFormatted = ethers.formatUnits(amount, bloomDecimals);
-      toast({ 
-        title: "Bet Placed!", 
-        description: `${Number(amountFormatted).toLocaleString()} BLOOM on ${direction.toUpperCase()}` 
-      });
-      
-      await refreshData();
-      return true;
-    } catch (error: any) {
-      console.error("Bet error:", error);
-      const msg = error.reason || error.shortMessage || error.message || "Transaction failed";
-      toast({ 
-        title: "Bet failed", 
-        description: msg, 
-        variant: "destructive" 
-      });
-      return false;
-    } finally {
-      setIsPending(false);
-    }
-  }, [getContracts, signer, userAddress, bloomDecimals, getAllowance, approveTokens, refreshData]);
-
-  // Auto-connect on mount for Farcaster
-  useEffect(() => {
-    if (hasInitialized.current) return;
-    hasInitialized.current = true;
-    
-    const autoConnect = async () => {
       try {
-        const inMiniApp = await sdk.isInMiniApp();
-        console.log('Auto-connect check - in Mini App:', inMiniApp);
-        
-        if (inMiniApp) {
-          // Small delay to ensure SDK is fully ready
-          await new Promise(resolve => setTimeout(resolve, 500));
-          await connect();
-        }
-      } catch (error) {
-        console.log("Auto-connect check failed:", error);
-      }
-    };
-    
-    autoConnect();
-  }, [connect]);
+        setIsPending(true);
 
-  // Refresh data when connected
+        const data = tokenIface.encodeFunctionData("approve", [
+          BLOOM_BETTING_ADDRESS,
+          ethers.MaxUint256,
+        ]);
+
+        toast({ title: "Approve BLOOM", description: "Confirm in Warpcast wallet" });
+
+        const hash = await sendTx({ to: BLOOM_TOKEN_ADDRESS, data });
+
+        toast({ title: "Approval sent", description: `${hash.slice(0, 10)}...` });
+
+        await provider.waitForTransaction(hash);
+        await refreshData();
+        return true;
+      } catch (e: any) {
+        toast({
+          title: "Approval failed",
+          description: e?.shortMessage ?? e?.message ?? "Approval failed",
+          variant: "destructive",
+        });
+        return false;
+      } finally {
+        setIsPending(false);
+      }
+    },
+    [provider, refreshData, sendTx, tokenIface, userAddress]
+  );
+
+  const placeBet = useCallback(
+    async (direction: "up" | "down", amount: bigint): Promise<boolean> => {
+      if (!provider || !userAddress) {
+        toast({ title: "Not connected", description: "Connect wallet first", variant: "destructive" });
+        return false;
+      }
+
+      try {
+        setIsPending(true);
+
+        const { token } = getReadContracts(provider);
+
+        const [balance, allowance] = await Promise.all([
+          token.balanceOf(userAddress).catch(() => 0n),
+          getAllowance(),
+        ]);
+
+        if (balance < amount) {
+          const bal = ethers.formatUnits(balance, bloomDecimals);
+          const need = ethers.formatUnits(amount, bloomDecimals);
+          toast({
+            title: "Insufficient BLOOM",
+            description: `Have ${Number(bal).toLocaleString()} but need ${Number(need).toLocaleString()}`,
+            variant: "destructive",
+          });
+          return false;
+        }
+
+        if (allowance < amount) {
+          const ok = await approveTokens(amount);
+          if (!ok) return false;
+        }
+
+        const dirEnum = direction === "up" ? Direction.Up : Direction.Down;
+        const data = bettingIface.encodeFunctionData("placeBet", [dirEnum, amount]);
+
+        toast({ title: "Place bet", description: "Confirm in Warpcast wallet" });
+
+        const hash = await sendTx({ to: BLOOM_BETTING_ADDRESS, data });
+        toast({ title: "Bet sent", description: `${hash.slice(0, 10)}...` });
+
+        await provider.waitForTransaction(hash);
+        await refreshData();
+        return true;
+      } catch (e: any) {
+        toast({
+          title: "Bet failed",
+          description: e?.shortMessage ?? e?.message ?? "Bet failed",
+          variant: "destructive",
+        });
+        return false;
+      } finally {
+        setIsPending(false);
+      }
+    },
+    [approveTokens, bettingIface, bloomDecimals, getAllowance, getReadContracts, provider, refreshData, sendTx, userAddress]
+  );
+
+  // Keep data fresh when connected
   useEffect(() => {
-    if (isConnected && userAddress && signer) {
-      refreshData();
-      const interval = setInterval(refreshData, 10000);
-      return () => clearInterval(interval);
-    }
-  }, [isConnected, userAddress, signer, refreshData]);
+    if (!isConnected) return;
+    refreshData();
+    const t = setInterval(refreshData, 10000);
+    return () => clearInterval(t);
+  }, [isConnected, refreshData]);
 
   return {
     isConnected,
     userAddress,
+
     bloomBalance,
     bloomDecimals,
+
     currentRound,
     userStats,
     hasUserBetThisRound,
     isBettingOpen,
     timeRemaining,
     minimumStake,
+
     isLoading,
     isPending,
+
     connect,
     placeBet,
     approveTokens,
     getAllowance,
-    refreshData
+    refreshData,
   };
 }
