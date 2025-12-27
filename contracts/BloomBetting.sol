@@ -9,16 +9,25 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 /**
  * @title BloomBetting (HyperWave Edition)
  * @dev House-based prediction market with fixed 2x payout
- * @notice Users can bet unlimited times per round. Draws = losses. Instant settlement.
+ * @notice Users can bet ONCE per round. Draws = losses. Instant settlement.
+ * 
+ * Key Features:
+ * - 1-minute rounds
+ * - Fixed 2x payout for winners
+ * - One bet per user per round (users can bet every new round)
+ * - Draws are treated as losses - house keeps all funds
+ * - Instant payouts upon settlement
+ * - Safer oracle with one-time price setting
  */
 contract BloomBetting is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // ============ Constants ============
     IERC20 public immutable bloomToken;
-    address public constant BLOOM_TOKEN_ADDRESS = 0xa07e759da6b3d4d75ed76f92fbcb867b9c145b07;
     uint256 public constant MINIMUM_STAKE = 100_000 * 10**18; // 100,000 BLOOM (18 decimals)
     uint256 public constant ROUND_DURATION = 60; // 1 minute rounds
+    uint256 public constant BETTING_CUTOFF = 10; // Betting closes 10 seconds before round ends
+    uint256 public constant HOUSE_EDGE_BP = 0; // 0% house edge (basis points) - future-proofing
     
     // ============ Enums ============
     enum Direction { None, Up, Down }
@@ -53,7 +62,7 @@ contract BloomBetting is Ownable, ReentrancyGuard {
         uint256 totalWins;
         uint256 totalLosses;
         uint256 totalStaked;
-        uint256 totalWinnings;
+        uint256 totalProfits; // Net profit from winning bets (renamed from totalWinnings for clarity)
         uint256 currentStreak;
         uint256 lastPlayedDay;
     }
@@ -61,12 +70,16 @@ contract BloomBetting is Ownable, ReentrancyGuard {
     // ============ State Variables ============
     uint256 public currentRoundId;
     uint256 public nextBetId;
+    bool public paused;
     
     mapping(uint256 => Round) public rounds;
-    mapping(uint256 => Bet[]) public roundBets; // roundId => all bets in round
+    mapping(uint256 => uint256[]) public roundBetIds; // roundId => bet IDs (single source of truth)
     mapping(address => uint256[]) public userBetIds; // user => their bet IDs across all rounds
-    mapping(uint256 => Bet) public betsById; // betId => Bet
+    mapping(uint256 => Bet) public betsById; // betId => Bet (primary storage)
     mapping(address => UserStats) public userStats;
+    
+    // One bet per user per round tracking
+    mapping(uint256 => mapping(address => bool)) public hasUserBetInRound;
 
     address public priceOracle;
 
@@ -74,8 +87,10 @@ contract BloomBetting is Ownable, ReentrancyGuard {
     event RoundStarted(uint256 indexed roundId, uint256 startTime, uint256 startPrice);
     event BetPlaced(uint256 indexed roundId, uint256 indexed betId, address indexed user, Direction direction, uint256 amount);
     event RoundSettled(uint256 indexed roundId, Direction result, uint256 endPrice, uint256 totalPayouts);
+    event RoundCancelled(uint256 indexed roundId);
     event StreakUpdated(address indexed user, uint256 streak);
     event OracleUpdated(address oldOracle, address newOracle);
+    event Paused(bool isPaused);
 
     // ============ Modifiers ============
     modifier onlyOracle() {
@@ -85,6 +100,11 @@ contract BloomBetting is Ownable, ReentrancyGuard {
 
     modifier roundExists(uint256 _roundId) {
         require(rounds[_roundId].startTime > 0, "Round does not exist");
+        _;
+    }
+
+    modifier notPaused() {
+        require(!paused, "Contract is paused");
         _;
     }
 
@@ -100,8 +120,9 @@ contract BloomBetting is Ownable, ReentrancyGuard {
     /**
      * @notice Start a new betting round
      * @param _startPrice The ETH price at round start (8 decimals from Chainlink)
+     * @dev Oracle can only set start price once per round
      */
-    function startRound(uint256 _startPrice) external onlyOracle {
+    function startRound(uint256 _startPrice) external onlyOracle notPaused {
         require(_startPrice > 0, "Invalid start price");
         
         // If there's an active round, ensure it's resolved
@@ -111,6 +132,9 @@ contract BloomBetting is Ownable, ReentrancyGuard {
 
         currentRoundId++;
         uint256 startTime = block.timestamp;
+        
+        // startPrice can only be set once (it's 0 for new rounds)
+        require(rounds[currentRoundId].startPrice == 0, "Start price already set");
         
         rounds[currentRoundId] = Round({
             roundId: currentRoundId,
@@ -128,18 +152,23 @@ contract BloomBetting is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Place a bet on the current round (UNLIMITED bets per user per round!)
+     * @notice Place a bet on the current round (ONE bet per user per round)
      * @param _direction UP (1) or DOWN (2)
      * @param _amount Amount of BLOOM tokens to stake
+     * @dev Users can bet every round, but only once per round
      */
-    function placeBet(Direction _direction, uint256 _amount) external nonReentrant {
+    function placeBet(Direction _direction, uint256 _amount) external nonReentrant notPaused {
         require(_direction == Direction.Up || _direction == Direction.Down, "Invalid direction");
         require(_amount >= MINIMUM_STAKE, "Below minimum stake");
         require(currentRoundId > 0, "No active round");
         
         Round storage round = rounds[currentRoundId];
-        require(block.timestamp < round.endTime - 10, "Betting closed (last 10s locked)");
+        require(block.timestamp < round.endTime - BETTING_CUTOFF, "Betting closed (last 10s locked)");
         require(!round.resolved, "Round already resolved");
+        
+        // One bet per user per round
+        require(!hasUserBetInRound[currentRoundId][msg.sender], "Already bet in this round");
+        hasUserBetInRound[currentRoundId][msg.sender] = true;
 
         // Transfer BLOOM tokens from user to contract
         bloomToken.safeTransferFrom(msg.sender, address(this), _amount);
@@ -164,8 +193,9 @@ contract BloomBetting is Ownable, ReentrancyGuard {
             payout: 0
         });
 
-        roundBets[currentRoundId].push(newBet);
+        // Single source of truth: store in betsById, reference by ID in roundBetIds
         betsById[nextBetId] = newBet;
+        roundBetIds[currentRoundId].push(nextBetId);
         userBetIds[msg.sender].push(nextBetId);
 
         // Update streak (1 per day regardless of win/lose)
@@ -175,15 +205,19 @@ contract BloomBetting is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Settle a round - INSTANT PAYOUT, no claiming needed!
+     * @notice Settle a round - INSTANT PAYOUT with solvency check
      * @param _roundId The round to settle
      * @param _endPrice The ETH price at resolution time
+     * @dev Checks contract has sufficient balance before paying winners
      */
-    function settleRound(uint256 _roundId, uint256 _endPrice) external onlyOracle roundExists(_roundId) {
+    function settleRound(uint256 _roundId, uint256 _endPrice) external onlyOracle notPaused roundExists(_roundId) {
         Round storage round = rounds[_roundId];
         require(!round.resolved, "Already resolved");
         require(block.timestamp >= round.endTime, "Round not ended yet");
         require(_endPrice > 0, "Invalid end price");
+        
+        // Oracle safety: end price can only be set once
+        require(round.endPrice == 0, "End price already set");
 
         round.endPrice = _endPrice;
         
@@ -197,14 +231,29 @@ contract BloomBetting is Ownable, ReentrancyGuard {
             round.result = Direction.None;
         }
 
+        // Calculate total required payout before settling
+        uint256[] storage betIds = roundBetIds[_roundId];
+        uint256 totalRequiredPayout = 0;
+        
+        // First pass: calculate required payout
+        for (uint256 i = 0; i < betIds.length; i++) {
+            Bet storage bet = betsById[betIds[i]];
+            if (round.result != Direction.None && bet.direction == round.result) {
+                totalRequiredPayout += bet.amount * 2; // Fixed 2x payout
+            }
+        }
+        
+        // Solvency check: ensure contract can cover all payouts
+        uint256 contractBalance = bloomToken.balanceOf(address(this));
+        require(contractBalance >= totalRequiredPayout, "House insufficient liquidity");
+
         round.resolved = true;
 
-        // Instant settlement - pay all winners immediately
-        Bet[] storage bets = roundBets[_roundId];
+        // Second pass: settle all bets and pay winners
         uint256 totalPayouts = 0;
 
-        for (uint256 i = 0; i < bets.length; i++) {
-            Bet storage bet = bets[i];
+        for (uint256 i = 0; i < betIds.length; i++) {
+            Bet storage bet = betsById[betIds[i]];
             
             // Only winners get paid (draw = loss, losers = nothing)
             if (round.result != Direction.None && bet.direction == round.result) {
@@ -219,16 +268,13 @@ contract BloomBetting is Ownable, ReentrancyGuard {
                 
                 // Update user stats
                 userStats[bet.user].totalWins++;
-                userStats[bet.user].totalWinnings += bet.amount; // Net profit
+                userStats[bet.user].totalProfits += bet.amount; // Net profit only (bet.amount is the profit on 2x)
             } else {
                 // Losers and draws - contract keeps funds
                 bet.result = BetResult.Lose;
                 bet.payout = 0;
                 userStats[bet.user].totalLosses++;
             }
-            
-            // Update bet in mapping
-            betsById[bet.betId] = bet;
             
             // Update general stats
             userStats[bet.user].totalBets++;
@@ -244,10 +290,10 @@ contract BloomBetting is Ownable, ReentrancyGuard {
      * @notice Check if betting is currently open
      */
     function isBettingOpen() public view returns (bool) {
-        if (currentRoundId == 0) return false;
+        if (currentRoundId == 0 || paused) return false;
         Round storage round = rounds[currentRoundId];
-        // Betting closes 10 seconds before round ends
-        return !round.resolved && block.timestamp < round.endTime - 10;
+        // Betting closes BETTING_CUTOFF seconds before round ends
+        return !round.resolved && block.timestamp < round.endTime - BETTING_CUTOFF;
     }
 
     /**
@@ -261,10 +307,22 @@ contract BloomBetting is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Get all bets for a round
+     * @notice Get all bet IDs for a round
+     */
+    function getRoundBetIds(uint256 _roundId) external view returns (uint256[] memory) {
+        return roundBetIds[_roundId];
+    }
+
+    /**
+     * @notice Get all bets for a round (convenience function)
      */
     function getRoundBets(uint256 _roundId) external view returns (Bet[] memory) {
-        return roundBets[_roundId];
+        uint256[] storage betIds = roundBetIds[_roundId];
+        Bet[] memory bets = new Bet[](betIds.length);
+        for (uint256 i = 0; i < betIds.length; i++) {
+            bets[i] = betsById[betIds[i]];
+        }
+        return bets;
     }
 
     /**
@@ -315,14 +373,21 @@ contract BloomBetting is Ownable, ReentrancyGuard {
      * @notice Get bet count for current round
      */
     function getCurrentRoundBetCount() external view returns (uint256) {
-        return roundBets[currentRoundId].length;
+        return roundBetIds[currentRoundId].length;
     }
 
     /**
-     * @notice Get contract's BLOOM balance (house profits)
+     * @notice Get contract's BLOOM balance (house profits + active bets)
      */
     function getHouseBalance() external view returns (uint256) {
         return bloomToken.balanceOf(address(this));
+    }
+
+    /**
+     * @notice Check if user has already bet in current round
+     */
+    function hasUserBetThisRound(address _user) external view returns (bool) {
+        return hasUserBetInRound[currentRoundId][_user];
     }
 
     // ============ Internal Functions ============
@@ -348,6 +413,17 @@ contract BloomBetting is Ownable, ReentrancyGuard {
 
     // ============ Admin Functions ============
 
+    /**
+     * @notice Pause/unpause the contract
+     */
+    function setPaused(bool _paused) external onlyOwner {
+        paused = _paused;
+        emit Paused(_paused);
+    }
+
+    /**
+     * @notice Update the price oracle address
+     */
     function setPriceOracle(address _newOracle) external onlyOwner {
         require(_newOracle != address(0), "Invalid oracle");
         emit OracleUpdated(priceOracle, _newOracle);
@@ -366,19 +442,30 @@ contract BloomBetting is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Emergency function to cancel a round (no payouts, everyone keeps pending status)
+     * @notice Emergency function to cancel a round and refund all bets
+     * @param _roundId The round to cancel
+     * @dev Updates bet states to Lose with full refund as payout
      */
     function emergencyCancelRound(uint256 _roundId) external onlyOwner roundExists(_roundId) {
         Round storage round = rounds[_roundId];
         require(!round.resolved, "Already resolved");
         
         // Refund all bets in this round
-        Bet[] storage bets = roundBets[_roundId];
-        for (uint256 i = 0; i < bets.length; i++) {
-            bloomToken.safeTransfer(bets[i].user, bets[i].amount);
+        uint256[] storage betIds = roundBetIds[_roundId];
+        for (uint256 i = 0; i < betIds.length; i++) {
+            Bet storage bet = betsById[betIds[i]];
+            
+            // Update bet state (cancelled = refunded, treated as loss for stats but money returned)
+            bet.result = BetResult.Lose;
+            bet.payout = bet.amount; // Refund amount
+            
+            // Transfer refund
+            bloomToken.safeTransfer(bet.user, bet.amount);
         }
         
         round.resolved = true;
         round.result = Direction.None;
+        
+        emit RoundCancelled(_roundId);
     }
 }
