@@ -31,6 +31,7 @@ const Index = () => {
     isConnected,
     userAddress,
     bloomBalance,
+    bloomDecimals,
     currentRound,
     userStats,
     hasUserBetThisRound,
@@ -42,9 +43,9 @@ const Index = () => {
     refreshData
   } = useBloomBetting();
   
-  // Convert bigint to number for display
-  const bloomBalanceNum = Number(ethers.formatEther(bloomBalance));
-  const minimumStakeNum = Number(ethers.formatEther(minimumStake));
+  // Convert bigint to number for display using correct decimals
+  const bloomBalanceNum = Number(ethers.formatUnits(bloomBalance, bloomDecimals));
+  const minimumStakeNum = Number(ethers.formatUnits(minimumStake, bloomDecimals));
   
   // Preload sounds on mount
   useEffect(() => {
@@ -123,8 +124,8 @@ const Index = () => {
       return;
     }
 
-    // Convert to bigint for contract
-    const amountInWei = ethers.parseEther(amount.toString());
+    // Convert to bigint for contract using correct decimals
+    const amountInWei = ethers.parseUnits(amount.toString(), bloomDecimals);
     
     // Place bet on-chain
     const success = await onChainPlaceBet(direction, amountInWei);
@@ -143,7 +144,7 @@ const Index = () => {
       };
       setRecentBets((prev) => [newBet, ...prev.slice(0, 9)]);
     }
-  }, [hasUserBetThisRound, currentBet, currentPhase, bloomBalanceNum, onChainPlaceBet, playBetSound]);
+  }, [hasUserBetThisRound, currentBet, currentPhase, bloomBalanceNum, bloomDecimals, onChainPlaceBet, playBetSound]);
 
   const handleResolutionComplete = useCallback(() => {
     // Determine result based on price movement

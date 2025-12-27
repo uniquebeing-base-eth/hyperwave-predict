@@ -3,18 +3,16 @@ import { motion } from "framer-motion";
 import { TrendingUp, TrendingDown, Zap, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
-import { ethers } from "ethers";
 
 interface BettingPanelProps {
   balance: number;
-  onPlaceBet: (direction: "up" | "down", amount: number) => void;
+  onPlaceBet: (direction: "up" | "down", amount: number) => Promise<void> | void;
   upOdds: number;
   downOdds: number;
   isBettingOpen: boolean;
   minimumStake?: number;
   hasUserBetThisRound?: boolean;
   isPending?: boolean;
-  onChainPlaceBet?: (direction: "up" | "down", amount: bigint) => Promise<boolean>;
   isConnected?: boolean;
   onConnect?: () => Promise<void>;
 }
@@ -28,7 +26,6 @@ const BettingPanel = ({
   minimumStake = 100000,
   hasUserBetThisRound = false,
   isPending = false,
-  onChainPlaceBet,
   isConnected = true,
   onConnect,
 }: BettingPanelProps) => {
@@ -79,23 +76,9 @@ const BettingPanel = ({
       return;
     }
 
-    // Use on-chain betting if available
-    if (onChainPlaceBet) {
-      const amountInWei = ethers.parseEther(betAmount.toString());
-      const success = await onChainPlaceBet(selectedDirection, amountInWei);
-      if (success) {
-        setSelectedDirection(null);
-      }
-    } else {
-      // Fallback to local state betting
-      onPlaceBet(selectedDirection, betAmount);
-      setSelectedDirection(null);
-      
-      toast({
-        title: "Bet Placed!",
-        description: `${betAmount} tokens on ${selectedDirection.toUpperCase()}`,
-      });
-    }
+    // Call the onPlaceBet handler (which now handles on-chain betting in Index.tsx)
+    await onPlaceBet(selectedDirection, betAmount);
+    setSelectedDirection(null);
   };
 
   const upPercentage = Math.round((upOdds / (upOdds + downOdds)) * 100);
