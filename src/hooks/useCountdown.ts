@@ -9,16 +9,20 @@ interface CountdownTime {
 
 export const useCountdown = (targetDate: Date): CountdownTime => {
   const calculateTimeLeft = useCallback((): CountdownTime => {
-    const now = new Date();
-    const difference = targetDate.getTime() - now.getTime();
+    const nowMs = Date.now();
+    const targetMs = targetDate.getTime();
+    const difference = targetMs - nowMs;
 
-    if (difference <= 0) {
+    if (difference <= 0 || Number.isNaN(difference)) {
       return { days: 0, hours: 0, minutes: 0, isEnded: true };
     }
 
-    const days = Math.floor(difference / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+    // Work in whole minutes to avoid any “carry”/display weirdness.
+    const totalMinutes = Math.floor(difference / (1000 * 60));
+
+    const days = Math.floor(totalMinutes / (60 * 24));
+    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+    const minutes = totalMinutes % 60;
 
     return { days, hours, minutes, isEnded: false };
   }, [targetDate]);
@@ -26,13 +30,12 @@ export const useCountdown = (targetDate: Date): CountdownTime => {
   const [timeLeft, setTimeLeft] = useState<CountdownTime>(calculateTimeLeft);
 
   useEffect(() => {
+    // Tick frequently for stability, but display changes only when minutes change.
     const timer = setInterval(() => {
       setTimeLeft(calculateTimeLeft());
-    }, 60000); // Update every minute
+    }, 1000);
 
-    // Initial calculation
     setTimeLeft(calculateTimeLeft());
-
     return () => clearInterval(timer);
   }, [calculateTimeLeft]);
 

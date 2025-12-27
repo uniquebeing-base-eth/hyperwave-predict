@@ -16,27 +16,26 @@ const PhaseTracker = ({
   totalRewards,
   tokenSymbol,
 }: PhaseTrackerProps) => {
-  // Memoize the phase end date to prevent recalculation on every render
+  // Phase countdown: treat `daysRemaining` as “days left including today” and count down to
+  // the end of the last remaining day (never shows 24h).
   const phaseEndDate = useMemo(() => {
-    const now = new Date();
-    const endDate = new Date(now);
-    endDate.setDate(endDate.getDate() + daysRemaining);
-    endDate.setHours(23, 59, 59, 999);
+    if (daysRemaining <= 0) return new Date();
+
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    const endDate = new Date(endOfToday);
+    endDate.setDate(endDate.getDate() + Math.max(daysRemaining - 1, 0));
     return endDate;
   }, [daysRemaining]);
-  
+
   const { days, hours, minutes, isEnded } = useCountdown(phaseEndDate);
 
   const progressPercentage = ((7 - daysRemaining) / 7) * 100;
 
   const formatCountdown = () => {
-    if (isEnded) return "Phase Ended";
-    
-    const dayLabel = days === 1 ? "day" : "days";
-    const hourLabel = hours === 1 ? "hour" : "hours";
-    const minLabel = minutes === 1 ? "min" : "mins";
-    
-    return `${days} ${dayLabel} ${hours} ${hourLabel} ${minutes} ${minLabel}`;
+    if (isEnded) return "ended";
+    return `${days}d ${hours}h ${minutes}m`;
   };
 
   return (
