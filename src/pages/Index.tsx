@@ -1,14 +1,16 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
+import { ethers } from "ethers";
 import MainLayout from "@/components/MainLayout";
 import ActionPage from "@/pages/ActionPage";
 import RewardsPage from "@/pages/RewardsPage";
 import StatsPage from "@/pages/StatsPage";
 import RoundResult from "@/components/RoundResult";
 import { useMiniAppPrompt } from "@/hooks/useMiniAppPrompt";
-import { useNeynarBalances } from "@/hooks/useNeynarBalances";
+import { useBloomBetting } from "@/hooks/useBloomBetting";
 import { GamePhase } from "@/components/GameTimer";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
+
 interface Bet {
   id: string;
   direction: "up" | "down";
@@ -17,8 +19,6 @@ interface Bet {
   timestamp: Date;
 }
 
-const MINIMUM_STAKE = 100000; // 100,000 BLOOM minimum
-
 const Index = () => {
   // Initialize mini app prompt
   useMiniAppPrompt();
@@ -26,35 +26,48 @@ const Index = () => {
   // Sound effects
   const { preloadSounds, playWinSound, playLoseSound, playBetSound } = useSoundEffects();
   
+  // On-chain betting hook
+  const {
+    isConnected,
+    userAddress,
+    bloomBalance,
+    currentRound,
+    userStats,
+    hasUserBetThisRound,
+    isBettingOpen: contractBettingOpen,
+    minimumStake,
+    isPending,
+    connect,
+    placeBet: onChainPlaceBet,
+    refreshData
+  } = useBloomBetting();
+  
+  // Convert bigint to number for display
+  const bloomBalanceNum = Number(ethers.formatEther(bloomBalance));
+  const minimumStakeNum = Number(ethers.formatEther(minimumStake));
+  
   // Preload sounds on mount
   useEffect(() => {
     preloadSounds();
   }, [preloadSounds]);
   
-  // Wallet balances via Neynar
-  const { ethBalance, bloomBalance } = useNeynarBalances();
-  const bloomBalanceNum = parseFloat(bloomBalance.replace(/,/g, '')) || 0;
-  const ethBalanceNum = parseFloat(ethBalance) || 0;
-  
   // Game state
   const [currentPhase, setCurrentPhase] = useState<GamePhase>("betting");
-  const [totalBets, setTotalBets] = useState(0);
-  const [wins, setWins] = useState(0);
-  const [streak, setStreak] = useState(0);
-  const [rewards, setRewards] = useState(0);
   const [roundNumber, setRoundNumber] = useState(1);
 
   // Betting state
   const [currentBet, setCurrentBet] = useState<{ direction: "up" | "down"; amount: number } | null>(null);
   const [recentBets, setRecentBets] = useState<Bet[]>([]);
 
-  // Odds (based on pool distribution)
-  const [upOdds, setUpOdds] = useState(50);
-  const [downOdds, setDownOdds] = useState(50);
+  // Odds (based on pool distribution from contract)
+  const upPool = currentRound ? Number(currentRound.totalUpPool) : 50;
+  const downPool = currentRound ? Number(currentRound.totalDownPool) : 50;
+  const totalPool = upPool + downPool;
+  const upOdds = totalPool > 0 ? Math.round((upPool / totalPool) * 100) : 50;
+  const downOdds = totalPool > 0 ? Math.round((downPool / totalPool) * 100) : 50;
 
   // Price state from real ETH data
   const [currentPrice, setCurrentPrice] = useState(0);
-  const [priceChange, setPriceChange] = useState(0);
   const startPriceRef = useRef<number>(0);
   const endPriceRef = useRef<number>(0);
 
@@ -62,33 +75,14 @@ const Index = () => {
   const [showResult, setShowResult] = useState(false);
   const [roundResult, setRoundResult] = useState<"up" | "down" | "draw" | null>(null);
 
-  // Track daily streak
-  const lastPlayedDayRef = useRef<string | null>(null);
-
-  const updateStreak = useCallback(() => {
-    const today = new Date().toDateString();
-    if (lastPlayedDayRef.current === today) {
-      // Already played today, streak doesn't change
-      return;
-    }
-    
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    
-    if (lastPlayedDayRef.current === yesterday.toDateString()) {
-      // Played yesterday, increment streak
-      setStreak(prev => prev + 1);
-    } else if (lastPlayedDayRef.current !== today) {
-      // Missed a day or first time, set streak to 1
-      setStreak(1);
-    }
-    
-    lastPlayedDayRef.current = today;
-  }, []);
+  // Stats from contract
+  const totalBets = userStats ? Number(userStats.totalBets) : 0;
+  const wins = userStats ? Number(userStats.totalWins) : 0;
+  const streak = userStats ? Number(userStats.currentStreak) : 0;
+  const rewards = totalBets * 1000; // Estimated rewards
 
   const handlePriceUpdate = useCallback((price: number, change: number) => {
     setCurrentPrice(price);
-    setPriceChange(change);
     
     // Set start price when betting phase begins
     if (currentPhase === "betting" && startPriceRef.current === 0) {
@@ -103,24 +97,22 @@ const Index = () => {
       // New round starting
       startPriceRef.current = currentPrice;
       setRoundNumber(prev => prev + 1);
+      setCurrentBet(null);
+      refreshData(); // Refresh contract data on new round
     }
-  }, [currentPrice]);
+  }, [currentPrice, refreshData]);
 
   const handlePriceSnapshot = useCallback(() => {
     endPriceRef.current = currentPrice;
   }, [currentPrice]);
 
-  const handlePlaceBet = (direction: "up" | "down", amount: number) => {
+  // Handle on-chain bet placement
+  const handlePlaceBet = useCallback(async (direction: "up" | "down", amount: number) => {
     // Check if user already placed a bet this round
-    if (currentBet !== null) {
+    if (hasUserBetThisRound || currentBet !== null) {
       return;
     }
     
-    // Check minimum stake
-    if (amount < MINIMUM_STAKE) {
-      return;
-    }
-
     // Check if betting is allowed
     if (currentPhase !== "betting") {
       return;
@@ -131,33 +123,27 @@ const Index = () => {
       return;
     }
 
-    setCurrentBet({ direction, amount });
+    // Convert to bigint for contract
+    const amountInWei = ethers.parseEther(amount.toString());
     
-    // Play bet sound
-    playBetSound();
+    // Place bet on-chain
+    const success = await onChainPlaceBet(direction, amountInWei);
+    
+    if (success) {
+      setCurrentBet({ direction, amount });
+      playBetSound();
 
-    // Update odds dynamically
-    if (direction === "up") {
-      setUpOdds((prev) => Math.min(prev + 5, 80));
-      setDownOdds((prev) => Math.max(prev - 5, 20));
-    } else {
-      setDownOdds((prev) => Math.min(prev + 5, 80));
-      setUpOdds((prev) => Math.max(prev - 5, 20));
+      // Add to recent bets as pending
+      const newBet: Bet = {
+        id: Date.now().toString(),
+        direction,
+        amount,
+        result: "pending",
+        timestamp: new Date(),
+      };
+      setRecentBets((prev) => [newBet, ...prev.slice(0, 9)]);
     }
-
-    // Add to recent bets as pending
-    const newBet: Bet = {
-      id: Date.now().toString(),
-      direction,
-      amount,
-      result: "pending",
-      timestamp: new Date(),
-    };
-    setRecentBets((prev) => [newBet, ...prev.slice(0, 9)]);
-
-    // Update streak for playing today
-    updateStreak();
-  };
+  }, [hasUserBetThisRound, currentBet, currentPhase, bloomBalanceNum, onChainPlaceBet, playBetSound]);
 
   const handleResolutionComplete = useCallback(() => {
     // Determine result based on price movement
@@ -177,26 +163,18 @@ const Index = () => {
 
     if (currentBet) {
       const isWin = result === currentBet.direction;
-      // DRAWS ARE LOSSES in HyperWave! No refunds.
-      const isDraw = result === "draw";
-
-      setTotalBets((prev) => prev + 1);
-      setRewards((prev) => prev + 1000); // 1000 BLOOM reward for playing
 
       if (isWin) {
-        setWins((prev) => prev + 1);
         playWinSound();
-        // Winner gets 2x payout instantly (simulated - actual contract does this)
       } else {
         playLoseSound();
       }
-      // Losses and draws - funds stay in contract (house wins)
 
-      // Update recent bets - draws count as losses now
+      // Update recent bets - draws count as losses
       setRecentBets((prev) =>
         prev.map((bet) =>
           bet.result === "pending"
-            ? { ...bet, result: isWin ? "win" : "lose" } // Draw = lose
+            ? { ...bet, result: isWin ? "win" : "lose" }
             : bet
         )
       );
@@ -204,18 +182,19 @@ const Index = () => {
       setShowResult(true);
     }
 
-    // Reset for next round - instant, no delay
+    // Refresh contract data
+    refreshData();
+
+    // Reset for next round
     setTimeout(() => {
       setCurrentBet(null);
-      setUpOdds(50);
-      setDownOdds(50);
       startPriceRef.current = 0;
       endPriceRef.current = 0;
-    }, 2000); // Quick reset for HyperWave pace
-  }, [currentBet, currentPrice, playWinSound, playLoseSound]);
+    }, 2000);
+  }, [currentBet, currentPrice, playWinSound, playLoseSound, refreshData]);
 
-  // Calculate if betting is allowed
-  const isBettingOpen = currentPhase === "betting";
+  // Calculate if betting is allowed (use local phase + contract state)
+  const isBettingOpen = currentPhase === "betting" && !hasUserBetThisRound;
 
   return (
     <>
@@ -226,8 +205,8 @@ const Index = () => {
             element={
               <ActionPage
                 balance={bloomBalanceNum}
-                upOdds={upOdds}
-                downOdds={downOdds}
+                upOdds={upOdds || 50}
+                downOdds={downOdds || 50}
                 isBettingOpen={isBettingOpen}
                 recentBets={recentBets}
                 onPlaceBet={handlePlaceBet}
@@ -236,8 +215,12 @@ const Index = () => {
                 onPriceSnapshot={handlePriceSnapshot}
                 onPriceUpdate={handlePriceUpdate}
                 currentPhase={currentPhase}
-                roundNumber={roundNumber}
-                minimumStake={MINIMUM_STAKE}
+                roundNumber={currentRound ? Number(currentRound.roundId) : roundNumber}
+                minimumStake={minimumStakeNum || 100000}
+                hasUserBetThisRound={hasUserBetThisRound}
+                isPending={isPending}
+                isConnected={isConnected}
+                onConnect={connect}
               />
             }
           />
@@ -246,7 +229,7 @@ const Index = () => {
             path="stats"
             element={
               <StatsPage
-                ethBalance={ethBalanceNum}
+                ethBalance={0}
                 bloomBalance={bloomBalanceNum}
                 totalBets={totalBets}
                 wins={wins}
