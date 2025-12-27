@@ -7,17 +7,15 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
- * @title BloomBetting (HyperWave Edition)
- * @dev House-based prediction market with fixed 2x payout
- * @notice Users can bet ONCE per round. Draws = losses. Instant settlement.
- * 
- * Key Features:
- * - 1-minute rounds
- * - Fixed 2x payout for winners
- * - One bet per user per round (users can bet every new round)
- * - Draws are treated as losses - house keeps all funds
- * - Instant payouts upon settlement
- * - Safer oracle with one-time price setting
+ * @title BloomBetting (Hyperwave Edition)
+ * @notice
+ * - Continuous 60-second rounds
+ * - One bet per user per round (UP or DOWN)
+ * - Users can bet again every new round
+ * - Draws are treated as losses
+ * - Losing bets remain in the contract (house)
+ * - Winners receive instant fixed 2x payout
+ * - Oracle provides ETH price at round start and end
  */
 contract BloomBetting is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
