@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { TrendingUp, TrendingDown, Zap } from "lucide-react";
+import { TrendingUp, TrendingDown, Zap, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
+import { ethers } from "ethers";
 
 interface BettingPanelProps {
   balance: number;
@@ -11,6 +12,11 @@ interface BettingPanelProps {
   downOdds: number;
   isBettingOpen: boolean;
   minimumStake?: number;
+  hasUserBetThisRound?: boolean;
+  isPending?: boolean;
+  onChainPlaceBet?: (direction: "up" | "down", amount: bigint) => Promise<boolean>;
+  isConnected?: boolean;
+  onConnect?: () => Promise<void>;
 }
 
 const BettingPanel = ({
@@ -20,17 +26,36 @@ const BettingPanel = ({
   downOdds,
   isBettingOpen,
   minimumStake = 100000,
+  hasUserBetThisRound = false,
+  isPending = false,
+  onChainPlaceBet,
+  isConnected = true,
+  onConnect,
 }: BettingPanelProps) => {
   const [betAmount, setBetAmount] = useState<number>(minimumStake);
   const [selectedDirection, setSelectedDirection] = useState<"up" | "down" | null>(null);
 
   const presetAmounts = [100000, 250000, 500000, 1000000];
 
-  const handlePlaceBet = () => {
+  const handlePlaceBet = async () => {
+    if (!isConnected && onConnect) {
+      await onConnect();
+      return;
+    }
+
     if (!selectedDirection) {
       toast({
         title: "Select Direction",
         description: "Choose UP or DOWN to place your bet",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (hasUserBetThisRound) {
+      toast({
+        title: "Already Bet",
+        description: "You can only place one bet per round",
         variant: "destructive",
       });
       return;
@@ -54,17 +79,29 @@ const BettingPanel = ({
       return;
     }
 
-    onPlaceBet(selectedDirection, betAmount);
-    setSelectedDirection(null);
-    
-    toast({
-      title: "Bet Placed! 🎯",
-      description: `${betAmount} tokens on ${selectedDirection.toUpperCase()}`,
-    });
+    // Use on-chain betting if available
+    if (onChainPlaceBet) {
+      const amountInWei = ethers.parseEther(betAmount.toString());
+      const success = await onChainPlaceBet(selectedDirection, amountInWei);
+      if (success) {
+        setSelectedDirection(null);
+      }
+    } else {
+      // Fallback to local state betting
+      onPlaceBet(selectedDirection, betAmount);
+      setSelectedDirection(null);
+      
+      toast({
+        title: "Bet Placed!",
+        description: `${betAmount} tokens on ${selectedDirection.toUpperCase()}`,
+      });
+    }
   };
 
   const upPercentage = Math.round((upOdds / (upOdds + downOdds)) * 100);
   const downPercentage = 100 - upPercentage;
+
+  const canBet = isBettingOpen && !hasUserBetThisRound && !isPending;
 
   return (
     <motion.div
@@ -73,6 +110,19 @@ const BettingPanel = ({
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.2 }}
     >
+      {/* Already bet warning */}
+      {hasUserBetThisRound && (
+        <motion.div
+          className="mb-4 p-3 rounded-lg bg-warning/10 border border-warning/30 text-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <span className="text-warning text-sm font-medium">
+            You've already placed a bet this round
+          </span>
+        </motion.div>
+      )}
+
       {/* Direction Buttons */}
       <div className="grid grid-cols-2 gap-4 mb-6">
         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
@@ -83,7 +133,7 @@ const BettingPanel = ({
               selectedDirection === "up" ? "ring-2 ring-success ring-offset-2 ring-offset-background" : ""
             }`}
             onClick={() => setSelectedDirection("up")}
-            disabled={!isBettingOpen}
+            disabled={!canBet}
           >
             <div className="flex flex-col items-center">
               <TrendingUp className="w-8 h-8 mb-1" />
@@ -109,7 +159,7 @@ const BettingPanel = ({
               selectedDirection === "down" ? "ring-2 ring-danger ring-offset-2 ring-offset-background" : ""
             }`}
             onClick={() => setSelectedDirection("down")}
-            disabled={!isBettingOpen}
+            disabled={!canBet}
           >
             <div className="flex flex-col items-center">
               <TrendingDown className="w-8 h-8 mb-1" />
@@ -128,7 +178,7 @@ const BettingPanel = ({
         </motion.div>
       </div>
 
-      {/* Odds Bar - VISUAL ONLY (Fixed 2x payout regardless of distribution) */}
+      {/* Odds Bar */}
       <div className="mb-6">
         <div className="flex justify-between text-xs text-muted-foreground mb-2">
           <span>Pool Distribution (visual only)</span>
@@ -151,7 +201,7 @@ const BettingPanel = ({
           />
         </div>
         <p className="text-xs text-muted-foreground/60 mt-1 text-center">
-          Unlimited bets per round • Draws = loss • Instant payouts
+          One bet per round • Draws = loss • Instant payouts
         </p>
       </div>
 
@@ -168,8 +218,9 @@ const BettingPanel = ({
               size="sm"
               onClick={() => setBetAmount(amount)}
               className="text-xs"
+              disabled={!canBet}
             >
-              {amount}
+              {amount >= 1000000 ? `${amount / 1000000}M` : `${amount / 1000}K`}
             </Button>
           ))}
         </div>
@@ -180,14 +231,16 @@ const BettingPanel = ({
             type="number"
             value={betAmount}
             onChange={(e) => setBetAmount(Math.max(0, Number(e.target.value)))}
-            className="w-full h-12 px-4 rounded-lg bg-muted border border-border text-foreground text-lg font-display focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            className="w-full h-12 px-4 rounded-lg bg-muted border border-border text-foreground text-lg font-display focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
             placeholder="Enter amount"
             min={1}
             max={balance}
+            disabled={!canBet}
           />
           <button
             onClick={() => setBetAmount(balance)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-primary hover:text-primary/80 font-semibold uppercase"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-primary hover:text-primary/80 font-semibold uppercase disabled:opacity-50"
+            disabled={!canBet}
           >
             Max
           </button>
@@ -200,17 +253,31 @@ const BettingPanel = ({
       </div>
 
       {/* Place Bet Button */}
-      <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+      <motion.div whileHover={{ scale: isPending ? 1 : 1.02 }} whileTap={{ scale: isPending ? 1 : 0.98 }}>
         <Button
           variant={selectedDirection === "up" ? "up" : selectedDirection === "down" ? "down" : "neon"}
           size="xl"
           className="w-full"
           onClick={handlePlaceBet}
-          disabled={!isBettingOpen || !selectedDirection}
+          disabled={(!canBet && isConnected) || isPending}
         >
-          <Zap className="w-5 h-5" />
-          {isBettingOpen ? (
-            selectedDirection ? `Place ${betAmount} on ${selectedDirection.toUpperCase()}` : "Select Direction"
+          {isPending ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Processing...
+            </>
+          ) : !isConnected ? (
+            <>
+              <Zap className="w-5 h-5" />
+              Connect Wallet
+            </>
+          ) : hasUserBetThisRound ? (
+            "Already Bet This Round"
+          ) : isBettingOpen ? (
+            <>
+              <Zap className="w-5 h-5" />
+              {selectedDirection ? `Place ${betAmount.toLocaleString()} on ${selectedDirection.toUpperCase()}` : "Select Direction"}
+            </>
           ) : (
             "Betting Closed"
           )}
@@ -218,7 +285,7 @@ const BettingPanel = ({
       </motion.div>
 
       {/* Potential Win */}
-      {selectedDirection && (
+      {selectedDirection && canBet && (
         <motion.div
           className="mt-4 p-3 rounded-lg bg-muted/50 text-center"
           initial={{ opacity: 0, height: 0 }}
@@ -226,7 +293,7 @@ const BettingPanel = ({
         >
           <span className="text-sm text-muted-foreground">Potential Win: </span>
           <span className="text-lg font-display font-bold text-success text-glow-success">
-            {(betAmount * 2).toLocaleString()} tokens
+            {(betAmount * 2).toLocaleString()} $BLOOM
           </span>
         </motion.div>
       )}
