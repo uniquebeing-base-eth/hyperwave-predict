@@ -1,14 +1,18 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Trophy, TrendingUp, Medal, Flame, Users } from "lucide-react";
+import { Trophy, TrendingUp, Medal, Flame, Users, Share2 } from "lucide-react";
 import { formatUnits } from "viem";
 import { ethers } from "ethers";
+import { useAccount } from "wagmi";
 import { BLOOM_BETTING_ABI, BLOOM_BETTING_ADDRESS, UserStats } from "@/contracts/BloomBetting";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { useFarcasterShare } from "@/hooks/useFarcasterShare";
+import { useFarcaster } from "@/contexts/FarcasterContext";
 
 interface FarcasterProfile {
   address: string;
@@ -26,6 +30,10 @@ interface LeaderboardEntry {
 }
 
 const LeaderboardPage = () => {
+  const { address } = useAccount();
+  const { shareLeaderboard } = useFarcasterShare();
+  const { user, isInMiniApp } = useFarcaster();
+  
   const [players, setPlayers] = useState<string[]>([]);
   const [playerStats, setPlayerStats] = useState<Map<string, UserStats>>(new Map());
   const [playerProfiles, setPlayerProfiles] = useState<Map<string, FarcasterProfile>>(new Map());
@@ -162,6 +170,26 @@ const LeaderboardPage = () => {
     return <span className="w-5 h-5 flex items-center justify-center text-muted-foreground text-sm">{rank}</span>;
   };
 
+  const handleSharePosition = async (entry: LeaderboardEntry, type: 'wins' | 'profit') => {
+    const username = entry.profile?.username || user?.username;
+    if (!username) return;
+    
+    const value = type === 'wins' 
+      ? `${Number(entry.stats.totalWins)}`
+      : formatProfit(entry.stats.totalProfits);
+    
+    await shareLeaderboard({
+      username,
+      rank: entry.rank,
+      type,
+      value,
+    });
+  };
+
+  const isCurrentUser = (entryAddress: string) => {
+    return address?.toLowerCase() === entryAddress.toLowerCase();
+  };
+
   const LeaderboardList = ({ entries, type }: { entries: LeaderboardEntry[], type: 'wins' | 'profit' }) => {
     if (loading) {
       return (
@@ -193,7 +221,7 @@ const LeaderboardPage = () => {
           >
             <Card className={`p-4 glass border-border/30 ${
               entry.rank <= 3 ? 'border-primary/50 bg-primary/5' : ''
-            }`}>
+            } ${isCurrentUser(entry.address) ? 'ring-2 ring-primary/50' : ''}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-8 flex justify-center">
@@ -229,19 +257,32 @@ const LeaderboardPage = () => {
                     </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  {type === 'wins' ? (
-                    <p className="text-lg font-bold text-primary">{Number(entry.stats.totalWins)}</p>
-                  ) : (
-                    <p className={`text-lg font-bold ${
-                      entry.stats.totalProfits >= 0n ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      {formatProfit(entry.stats.totalProfits)}
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    {type === 'wins' ? (
+                      <p className="text-lg font-bold text-primary">{Number(entry.stats.totalWins)}</p>
+                    ) : (
+                      <p className={`text-lg font-bold ${
+                        entry.stats.totalProfits >= 0n ? 'text-green-400' : 'text-red-400'
+                      }`}>
+                        {formatProfit(entry.stats.totalProfits)}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      {type === 'wins' ? 'wins' : 'BLOOM'}
                     </p>
+                  </div>
+                  {/* Share button only visible to the user for their own position */}
+                  {isInMiniApp && isCurrentUser(entry.address) && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 w-8 p-0"
+                      onClick={() => handleSharePosition(entry, type)}
+                    >
+                      <Share2 className="w-4 h-4" />
+                    </Button>
                   )}
-                  <p className="text-xs text-muted-foreground">
-                    {type === 'wins' ? 'wins' : 'BLOOM'}
-                  </p>
                 </div>
               </div>
             </Card>
