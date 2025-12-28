@@ -24,6 +24,40 @@ const CHAINLINK_ABI = [
   "function latestRoundData() view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)",
 ];
 
+const PRICE_SCALE = 100000000n; // 8 decimals
+
+function parseUsdTo8Decimals(input: string): bigint {
+  const s = String(input).trim();
+  if (!s) return 0n;
+
+  const [intPartRaw, fracRaw = ""] = s.split(".");
+  const intPart = intPartRaw.replace(/[^0-9]/g, "") || "0";
+  const frac = fracRaw.replace(/[^0-9]/g, "");
+  const fracPadded = (frac + "00000000").slice(0, 8);
+
+  return BigInt(intPart) * PRICE_SCALE + BigInt(fracPadded || "0");
+}
+
+async function fetchSpotEthUsd8(): Promise<bigint | null> {
+  try {
+    const res = await fetch("https://api.coinbase.com/v2/prices/ETH-USD/spot", {
+      headers: { "User-Agent": "HyperWave Oracle" },
+    });
+    if (!res.ok) {
+      console.log("Coinbase spot fetch failed:", res.status);
+      return null;
+    }
+    const json = await res.json();
+    const amount = String(json?.data?.amount ?? "");
+    const parsed = parseUsdTo8Decimals(amount);
+    return parsed > 0n ? parsed : null;
+  } catch (e) {
+    console.log("Coinbase spot fetch error:", e);
+    return null;
+  }
+}
+
+
 serve(async (req) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
@@ -58,22 +92,38 @@ serve(async (req) => {
     
     let resolved = false;
     let endTime = 0n;
-    
+    let startPrice = 0n;
+
     if (currentRoundId > 0n) {
       const round = await bettingContract.getCurrentRound();
       resolved = round.resolved;
       endTime = round.endTime;
+      startPrice = round.startPrice;
     }
-    
+
     console.log(`Current Round: ${currentRoundId}`);
     console.log(`Betting Open: ${isBettingOpen}`);
     console.log(`Time Remaining: ${timeRemaining}s`);
     console.log(`Resolved: ${resolved}`);
-    
+    console.log(`Start Price (8dp): ${startPrice}`);
+
     // Get current ETH price from Chainlink (8 decimals)
     const [, answer] = await chainlinkContract.latestRoundData();
-    const ethPrice = answer > 0n ? answer : 0n;
-    console.log(`Chainlink ETH/USD price: $${Number(ethPrice) / 1e8}`);
+    let priceUsed = answer > 0n ? answer : 0n;
+    console.log(`Chainlink ETH/USD price: $${Number(priceUsed) / 1e8}`);
+
+    // If Chainlink doesn't update during the round, startPrice can equal endPrice → draws.
+    // To avoid constant draws, we fall back to a spot price feed when settling and the value is unchanged.
+    const getSettlePrice = async () => {
+      if (startPrice > 0n && priceUsed === startPrice) {
+        const spot = await fetchSpotEthUsd8();
+        if (spot && spot !== startPrice) {
+          console.log("Chainlink unchanged; using spot price:", spot.toString());
+          return spot;
+        }
+      }
+      return priceUsed;
+    };
     
     let action = "none";
     let txHash = "";
@@ -84,22 +134,25 @@ serve(async (req) => {
     
     if (currentRoundId === 0n || resolved) {
       // Start a new round
-      console.log("Starting new round with price:", ethPrice.toString());
-      
-      const tx = await bettingContract.startRound(ethPrice);
+      console.log("Starting new round with price:", priceUsed.toString());
+
+      const tx = await bettingContract.startRound(priceUsed);
       console.log(`Transaction sent: ${tx.hash}`);
-      
+
       const receipt = await tx.wait();
       console.log(`Transaction confirmed in block ${receipt?.blockNumber}`);
-      
+
       txHash = tx.hash;
       action = "startRound";
-      
-    } else if (!resolved && timeRemaining === 0n) {
-      // Settle the current round, then immediately start the next round (keeps rounds continuous)
-      console.log(`Settling round ${currentRoundId} with price:`, ethPrice.toString());
 
-      const settleTx = await bettingContract.settleRound(currentRoundId, ethPrice);
+    } else if (!resolved && timeRemaining === 0n) {
+      const settlePrice = await getSettlePrice();
+      priceUsed = settlePrice;
+
+      // Settle the current round, then immediately start the next round (keeps rounds continuous)
+      console.log(`Settling round ${currentRoundId} with price:`, settlePrice.toString());
+
+      const settleTx = await bettingContract.settleRound(currentRoundId, settlePrice);
       console.log(`Transaction sent: ${settleTx.hash}`);
 
       const settleReceipt = await settleTx.wait();
@@ -108,10 +161,10 @@ serve(async (req) => {
       txHash = settleTx.hash;
       action = "settleRound";
 
-      // Start next round right away using the same latest price as start price
-      console.log("Starting next round immediately with price:", ethPrice.toString());
+      // Start next round right away using the settle price as start price
+      console.log("Starting next round immediately with price:", settlePrice.toString());
 
-      const startTx = await bettingContract.startRound(ethPrice);
+      const startTx = await bettingContract.startRound(settlePrice);
       console.log(`Transaction sent: ${startTx.hash}`);
 
       const startReceipt = await startTx.wait();
@@ -130,7 +183,7 @@ serve(async (req) => {
         isBettingOpen,
         timeRemaining: timeRemaining.toString(),
         resolved,
-        ethPrice: ethPrice.toString(),
+        ethPrice: priceUsed.toString(),
       },
     };
     
