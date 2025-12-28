@@ -1,5 +1,8 @@
 import { motion } from "framer-motion";
-import { Wallet, Trophy, Target, Flame, Coins } from "lucide-react";
+import { Wallet, Trophy, Target, Flame, Coins, Share2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useFarcasterShare } from "@/hooks/useFarcasterShare";
+import { useFarcaster } from "@/contexts/FarcasterContext";
 
 interface UserStatsProps {
   ethBalance: number;
@@ -10,7 +13,20 @@ interface UserStatsProps {
 }
 
 const UserStats = ({ ethBalance, bloomBalance, totalBets, wins, streak }: UserStatsProps) => {
+  const { shareStats } = useFarcasterShare();
+  const { user, isInMiniApp } = useFarcaster();
   const winRate = totalBets > 0 ? Math.round((wins / totalBets) * 100) : 0;
+
+  const handleShare = async () => {
+    if (user?.username) {
+      await shareStats({
+        username: user.username,
+        totalBets,
+        winRate,
+        streak,
+      });
+    }
+  };
 
   const stats = [
     {
@@ -88,6 +104,25 @@ const UserStats = ({ ethBalance, bloomBalance, totalBets, wins, streak }: UserSt
           </motion.div>
         ))}
       </div>
+
+      {/* Share Stats Button */}
+      {isInMiniApp && user?.username && (
+        <motion.div
+          className="mt-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.8 }}
+        >
+          <Button 
+            onClick={handleShare}
+            variant="outline"
+            className="w-full border-primary/30 hover:bg-primary/10"
+          >
+            <Share2 className="w-4 h-4 mr-2" />
+            Share Stats on Farcaster
+          </Button>
+        </motion.div>
+      )}
     </motion.div>
   );
 };

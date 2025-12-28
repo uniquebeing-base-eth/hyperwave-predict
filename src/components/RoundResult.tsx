@@ -1,5 +1,8 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { TrendingUp, TrendingDown, Minus, Trophy, X, Zap } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Trophy, X, Zap, Share2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useFarcasterShare } from "@/hooks/useFarcasterShare";
+import { useFarcaster } from "@/contexts/FarcasterContext";
 
 interface RoundResultProps {
   result: "up" | "down" | "draw" | null;
@@ -16,9 +19,22 @@ const RoundResult = ({
   isVisible,
   onClose,
 }: RoundResultProps) => {
+  const { shareWin } = useFarcasterShare();
+  const { user, isInMiniApp } = useFarcaster();
+  
   // HyperWave: Draw = Loss (no refunds, house keeps funds)
   const isWin = result !== null && result !== "draw" && result === userBet;
   const isLoss = !isWin;
+
+  const handleShare = async () => {
+    if (result && result !== "draw") {
+      await shareWin({
+        amount,
+        result,
+        username: user?.username,
+      });
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -151,6 +167,24 @@ const RoundResult = ({
                 Claim after 7-day streak
               </p>
             </motion.div>
+
+            {/* Share Button - Only show for wins */}
+            {isWin && isInMiniApp && (
+              <motion.div
+                className="mt-4"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 }}
+              >
+                <Button 
+                  onClick={handleShare}
+                  className="w-full bg-[#8B5CF6] hover:bg-[#7C3AED] text-white"
+                >
+                  <Share2 className="w-4 h-4 mr-2" />
+                  Share on Farcaster
+                </Button>
+              </motion.div>
+            )}
           </motion.div>
         </motion.div>
       )}
