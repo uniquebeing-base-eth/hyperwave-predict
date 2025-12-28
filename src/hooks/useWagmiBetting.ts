@@ -1,6 +1,7 @@
 import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { useState, useEffect, useCallback } from 'react';
-import { formatUnits, parseUnits, maxUint256 } from 'viem';
+import { formatUnits, maxUint256 } from 'viem';
+import { base } from 'wagmi/chains';
 import { 
   BLOOM_BETTING_ADDRESS, 
   BLOOM_TOKEN_ADDRESS, 
@@ -169,7 +170,7 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
         functionName: 'approve',
         args: [BLOOM_BETTING_ADDRESS, maxUint256],
         account: address,
-        chain: { id: 8453, name: 'Base', nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: ['https://mainnet.base.org'] } } },
+        chain: base,
       });
 
       setPendingTxHash(hash);
@@ -238,7 +239,7 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
         functionName: 'placeBet',
         args: [directionEnum, amount],
         account: address,
-        chain: { id: 8453, name: 'Base', nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: ['https://mainnet.base.org'] } } },
+        chain: base,
       });
 
       setPendingTxHash(hash);
