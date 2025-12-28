@@ -156,6 +156,18 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
     }
   }, [connect, connectors]);
 
+
+  // Refresh all data
+  const refreshData = useCallback(() => {
+    refetchBalance();
+    refetchAllowance();
+    refetchRound();
+    refetchStats();
+    refetchHasBet();
+    refetchBettingOpen();
+    refetchTime();
+  }, [refetchBalance, refetchAllowance, refetchRound, refetchStats, refetchHasBet, refetchBettingOpen, refetchTime]);
+
   // Approve tokens
   const approveTokens = useCallback(async (amount: bigint): Promise<boolean> => {
     if (!address) return false;
@@ -311,16 +323,6 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
     refreshData,
   ]);
 
-  // Refresh all data
-  const refreshData = useCallback(() => {
-    refetchBalance();
-    refetchAllowance();
-    refetchRound();
-    refetchStats();
-    refetchHasBet();
-    refetchBettingOpen();
-    refetchTime();
-  }, [refetchBalance, refetchAllowance, refetchRound, refetchStats, refetchHasBet, refetchBettingOpen, refetchTime]);
 
   // Auto-refresh every 10 seconds
   useEffect(() => {
