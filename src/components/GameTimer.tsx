@@ -62,6 +62,7 @@ const GameTimer = ({
       if (nextPhase === "resolving") {
         onPriceSnapshot();
         hasResolved.current = false;
+        setTimeLeft(0);
       }
 
       if (nextPhase === "betting") {
@@ -73,6 +74,8 @@ const GameTimer = ({
       setTimeLeft(Math.max(t - bettingCutoff, 0));
     } else if (nextPhase === "locked") {
       setTimeLeft(t);
+    } else {
+      setTimeLeft(0);
     }
   }, [contractTimeRemaining, bettingCutoff, onPhaseChange, onPriceSnapshot, phase]);
 
@@ -114,8 +117,9 @@ const GameTimer = ({
     return () => clearInterval(interval);
   }, [phase, onPhaseChange, onResolutionComplete, onPriceSnapshot, bettingCutoff, bettingDuration, contractTimeRemaining]);
 
-  // Resolving display countdown (both modes)
+  // Resolving display countdown (local mode only)
   useEffect(() => {
+    if (contractTimeRemaining !== undefined && contractTimeRemaining !== null) return;
     if (phase !== "resolving") return;
 
     setTimeLeft(3);
@@ -133,7 +137,7 @@ const GameTimer = ({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [phase, onResolutionComplete]);
+  }, [phase, onResolutionComplete, contractTimeRemaining]);
 
   const progress = (timeLeft / getTotalDuration()) * 100;
   const circumference = 2 * Math.PI * 45;
