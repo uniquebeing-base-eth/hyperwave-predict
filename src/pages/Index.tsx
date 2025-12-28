@@ -42,6 +42,7 @@ const Index = () => {
     isBettingOpen: contractBettingOpen,
     timeRemaining,
     minimumStake,
+    roundBetCount,
     isPending,
     connect,
     placeBet: onChainPlaceBet,
@@ -311,6 +312,7 @@ const Index = () => {
                 currentPhase={currentPhase}
                 roundNumber={currentRound ? Number(currentRound.roundId) : roundNumber}
                 minimumStake={minimumStakeNum || 100000}
+                roundBetCount={roundBetCount}
                 contractTimeRemaining={timeRemaining}
                 hasUserBetThisRound={hasUserBetThisRound}
                 isPending={isPending}

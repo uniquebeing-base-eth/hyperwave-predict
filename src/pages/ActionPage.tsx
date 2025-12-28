@@ -26,6 +26,7 @@ interface ActionPageProps {
   currentPhase: GamePhase;
   roundNumber: number;
   minimumStake: number;
+  roundBetCount?: number;
   contractTimeRemaining?: number;
   hasUserBetThisRound?: boolean;
   isPending?: boolean;
@@ -48,6 +49,7 @@ const ActionPage = ({
   roundNumber,
   minimumStake,
   contractTimeRemaining,
+  roundBetCount = 0,
   hasUserBetThisRound = false,
   isPending = false,
   isConnected = true,
@@ -76,8 +78,8 @@ const ActionPage = ({
           <span className="px-2 py-0.5 rounded-full bg-primary/20 text-xs text-primary">
             Min: {minimumStake.toLocaleString()} $BLOOM
           </span>
-          <span className="px-2 py-0.5 rounded-full bg-success/20 text-xs text-success">
-            1 bet per round
+          <span className="px-2 py-0.5 rounded-full bg-accent/20 text-xs text-accent-foreground font-semibold">
+            {roundBetCount} bet{roundBetCount === 1 ? '' : 's'} this round
           </span>
           <span className="px-2 py-0.5 rounded-full bg-warning/20 text-xs text-warning">
             60s rounds

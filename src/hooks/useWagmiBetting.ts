@@ -24,6 +24,7 @@ interface UseWagmiBettingReturn {
   isBettingOpen: boolean;
   timeRemaining: number;
   minimumStake: bigint;
+  roundBetCount: number;
   isLoading: boolean;
   isPending: boolean;
   
@@ -42,8 +43,9 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
   const { disconnect } = useDisconnect();
   const { data: sendCallsData, isPending: isSendingCalls, sendCalls, reset: resetSendCalls } = useSendCalls();
 
-  const { isLoading: isConfirming } = useWaitForCallsStatus({
+  const { data: callsStatus, isLoading: isConfirming, refetch: refetchCallsStatus } = useWaitForCallsStatus({
     id: sendCallsData?.id,
+    query: { enabled: !!sendCallsData?.id },
   });
 
   const [isApproving, setIsApproving] = useState(false);
@@ -126,6 +128,14 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
     functionName: 'minimumStake',
   });
 
+  // Read current round bet count
+  const { data: roundBetCount, refetch: refetchBetCount } = useReadContract({
+    address: BLOOM_BETTING_ADDRESS,
+    abi: BLOOM_BETTING_ABI,
+    functionName: 'getCurrentRoundBetCount',
+    query: { refetchInterval: 6000 },
+  });
+
   const currentRound: Round | null = roundData ? {
     roundId: roundData.roundId,
     startTime: roundData.startTime,
@@ -166,7 +176,8 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
     refetchHasBet();
     refetchBettingOpen();
     refetchTime();
-  }, [refetchBalance, refetchAllowance, refetchRound, refetchStats, refetchHasBet, refetchBettingOpen, refetchTime]);
+    refetchBetCount();
+  }, [refetchBalance, refetchAllowance, refetchRound, refetchStats, refetchHasBet, refetchBettingOpen, refetchTime, refetchBetCount]);
 
   const approveTokens = useCallback(async (_amount: bigint): Promise<boolean> => {
     if (!address) return false;
@@ -282,19 +293,57 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
 
       toast({ title: 'Confirm transaction...', description: 'Confirm in your wallet' });
 
-      sendCalls({ calls });
+      // Use async sendCalls and wait for actual confirmation
+      return new Promise((resolve) => {
+        sendCalls(
+          { calls },
+          {
+            onSuccess: async () => {
+              // Poll for confirmation by checking hasUserBetThisRound
+              let confirmed = false;
+              for (let i = 0; i < 20; i++) {
+                await new Promise((r) => setTimeout(r, 2000));
+                const { data: hasBet } = await refetchHasBet();
+                if (hasBet) {
+                  confirmed = true;
+                  break;
+                }
+              }
 
-      // Wait for transaction to be sent and confirmed
-      await new Promise((resolve) => setTimeout(resolve, 10000));
-
-      toast({
-        title: 'Bet Placed!',
-        description: `${Number(formatUnits(amount, bloomDecimals)).toLocaleString()} BLOOM on ${direction.toUpperCase()}`,
+              if (confirmed) {
+                toast({
+                  title: 'Bet Placed!',
+                  description: `${Number(formatUnits(amount, bloomDecimals)).toLocaleString()} BLOOM on ${direction.toUpperCase()}`,
+                });
+                resetSendCalls();
+                refreshData();
+                setIsBetting(false);
+                resolve(true);
+              } else {
+                toast({
+                  title: 'Bet may have failed',
+                  description: 'Transaction sent but not confirmed. Please check your wallet.',
+                  variant: 'destructive',
+                });
+                resetSendCalls();
+                setIsBetting(false);
+                resolve(false);
+              }
+            },
+            onError: (error: any) => {
+              console.error('Bet error:', error);
+              toast({
+                title: 'Bet failed',
+                description: error.shortMessage || error.message || 'Transaction rejected',
+                variant: 'destructive',
+              });
+              resetSendCalls();
+              setIsBetting(false);
+              resolve(false);
+            },
+          }
+        );
       });
-
-      resetSendCalls();
-      refreshData();
-      return true;
     } catch (error: any) {
       console.error('Bet error:', error);
       toast({
@@ -346,6 +395,7 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
     isBettingOpen: isBettingOpenData ?? false,
     timeRemaining: Number(timeRemainingData ?? 0n),
     minimumStake: minStakeData ?? 0n,
+    roundBetCount: Number(roundBetCount ?? 0n),
     isLoading: isConfirming,
     isPending: isSendingCalls || isApproving || isBetting || isConfirming,
     connect: handleConnect,
