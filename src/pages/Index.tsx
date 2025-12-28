@@ -123,12 +123,7 @@ const Index = () => {
       return;
     }
 
-    // Check if betting is allowed
-    if (currentPhase !== "betting") {
-      return;
-    }
-
-    // Check on-chain contract betting window
+    // Check on-chain contract betting window (ignore local phase)
     if (!contractBettingOpen) {
       return;
     }
@@ -161,7 +156,6 @@ const Index = () => {
   }, [
     hasUserBetThisRound,
     currentBet,
-    currentPhase,
     contractBettingOpen,
     displayBloomBalanceNum,
     bloomDecimals,
@@ -217,9 +211,8 @@ const Index = () => {
     }, 2000);
   }, [currentBet, currentPrice, playWinSound, playLoseSound, refreshData]);
 
-  // Calculate if betting is allowed (local phase + on-chain contract)
-  const isBettingOpen =
-    currentPhase === "betting" && (contractBettingOpen ?? false) && !hasUserBetThisRound;
+  // Calculate if betting is allowed - rely ONLY on contract state, not local timer
+  const isBettingOpen = (contractBettingOpen ?? false) && !hasUserBetThisRound;
 
   return (
     <>
