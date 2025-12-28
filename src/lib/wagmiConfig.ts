@@ -9,7 +9,7 @@ export const wagmiConfig = createConfig({
   transports: {
     [base.id]: http(),
   },
-  ssr: true,
+  
 });
 
 // Re-export contract addresses and ABIs
