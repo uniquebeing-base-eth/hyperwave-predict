@@ -1,15 +1,17 @@
-import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useAccount, useConnect, useDisconnect, useReadContract, useSendCalls } from 'wagmi';
 import { useState, useEffect, useCallback } from 'react';
-import { formatUnits, maxUint256 } from 'viem';
+import { encodeFunctionData, formatUnits, maxUint256 } from 'viem';
 import { base } from 'wagmi/chains';
-import { 
-  BLOOM_BETTING_ADDRESS, 
-  BLOOM_TOKEN_ADDRESS, 
-  BLOOM_BETTING_ABI, 
+import { waitForCallsStatus } from '@wagmi/core';
+import {
+  wagmiConfig,
+  BLOOM_BETTING_ADDRESS,
+  BLOOM_TOKEN_ADDRESS,
+  BLOOM_BETTING_ABI,
   ERC20_ABI,
   Direction,
   type Round,
-  type UserStats
+  type UserStats,
 } from '@/lib/wagmiConfig';
 import { toast } from '@/hooks/use-toast';
 
@@ -41,16 +43,11 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
-  const { writeContractAsync, isPending: isWritePending } = useWriteContract();
-  
-  const [pendingTxHash, setPendingTxHash] = useState<`0x${string}` | undefined>();
+  const sendCalls = useSendCalls();
+
   const [isApproving, setIsApproving] = useState(false);
   const [isBetting, setIsBetting] = useState(false);
-
-  // Wait for transaction
-  const { isLoading: isTxLoading } = useWaitForTransactionReceipt({
-    hash: pendingTxHash,
-  });
+  const [isAwaitingConfirmation, setIsAwaitingConfirmation] = useState(false);
 
   // Read token decimals
   const { data: decimalsData } = useReadContract({
@@ -169,52 +166,50 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
   }, [refetchBalance, refetchAllowance, refetchRound, refetchStats, refetchHasBet, refetchBettingOpen, refetchTime]);
 
   // Approve tokens
-  const approveTokens = useCallback(async (amount: bigint): Promise<boolean> => {
+  const approveTokens = useCallback(async (_amount: bigint): Promise<boolean> => {
     if (!address) return false;
 
     try {
       setIsApproving(true);
-      toast({ title: "Approving BLOOM...", description: "Please confirm in your wallet" });
+      toast({ title: 'Approving BLOOM...', description: 'Confirm in your wallet' });
 
-      const hash = await writeContractAsync({
-        address: BLOOM_TOKEN_ADDRESS,
+      const approveData = encodeFunctionData({
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [BLOOM_BETTING_ADDRESS, maxUint256],
-        account: address,
-        chain: base,
       });
 
-      setPendingTxHash(hash);
-      toast({ title: "Transaction Sent", description: "Waiting for confirmation..." });
+      const { id } = await sendCalls.mutateAsync({
+        calls: [{ to: BLOOM_TOKEN_ADDRESS, data: approveData }],
+      });
 
-      // Wait for confirmation
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      toast({ title: 'Transaction Sent', description: 'Waiting for confirmation...' });
+      setIsAwaitingConfirmation(true);
+      await waitForCallsStatus(wagmiConfig, { id, timeout: 60_000 });
+
       await refetchAllowance();
-
-      toast({ title: "Approved!", description: "You can now place your bet" });
+      toast({ title: 'Approved!', description: 'You can now place your bet' });
       return true;
     } catch (error: any) {
-      console.error("Approval error:", error);
-      toast({ 
-        title: "Approval failed", 
-        description: error.shortMessage || error.message || "Transaction rejected", 
-        variant: "destructive" 
+      console.error('Approval error:', error);
+      toast({
+        title: 'Approval failed',
+        description: error.shortMessage || error.message || 'Transaction rejected',
+        variant: 'destructive',
       });
       return false;
     } finally {
       setIsApproving(false);
-      setPendingTxHash(undefined);
+      setIsAwaitingConfirmation(false);
     }
-  }, [address, writeContractAsync, refetchAllowance]);
+  }, [address, sendCalls, refetchAllowance]);
 
-  // Place bet
   const placeBet = useCallback(async (direction: 'up' | 'down', amount: bigint): Promise<boolean> => {
     if (!address) {
-      toast({ 
-        title: "Not connected", 
-        description: "Please connect your wallet first", 
-        variant: "destructive" 
+      toast({
+        title: 'Not connected',
+        description: 'Please connect your wallet first',
+        variant: 'destructive',
       });
       return false;
     }
@@ -222,21 +217,21 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
     try {
       setIsBetting(true);
 
-      // Contract-side prechecks (avoid opaque "missing revert data" errors)
+      // Contract-side prechecks (avoid opaque errors)
       if (!(isBettingOpenData ?? false)) {
         toast({
-          title: "Betting closed",
-          description: "Wait for the next round to start.",
-          variant: "destructive",
+          title: 'Betting closed',
+          description: 'Wait for the next round to start.',
+          variant: 'destructive',
         });
         return false;
       }
 
       if (hasBetData ?? false) {
         toast({
-          title: "Already bet this round",
-          description: "You can only place one bet per round.",
-          variant: "destructive",
+          title: 'Already bet this round',
+          description: 'You can only place one bet per round.',
+          variant: 'destructive',
         });
         return false;
       }
@@ -244,79 +239,78 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
       const minStake = minStakeData ?? 0n;
       if (minStake > 0n && amount < minStake) {
         toast({
-          title: "Stake too low",
+          title: 'Stake too low',
           description: `Minimum stake is ${Number(formatUnits(minStake, bloomDecimals)).toLocaleString()} BLOOM.`,
-          variant: "destructive",
+          variant: 'destructive',
         });
         return false;
       }
 
-      // Check balance
       if (bloomBalance < amount) {
         const balanceFormatted = formatUnits(bloomBalance, bloomDecimals);
         const amountFormatted = formatUnits(amount, bloomDecimals);
         toast({
-          title: "Insufficient Balance",
+          title: 'Insufficient Balance',
           description: `You have ${Number(balanceFormatted).toLocaleString()} BLOOM but need ${Number(amountFormatted).toLocaleString()}`,
-          variant: "destructive",
+          variant: 'destructive',
         });
         return false;
       }
 
-      // Check allowance
-      if (allowance < amount) {
-        toast({ title: "Approval needed", description: "Approving BLOOM tokens..." });
-        const approved = await approveTokens(amount);
-        if (!approved) return false;
-      }
-
       const directionEnum = direction === 'up' ? Direction.Up : Direction.Down;
 
-      toast({ title: "Placing bet...", description: "Please confirm in your wallet" });
+      const approveData = encodeFunctionData({
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [BLOOM_BETTING_ADDRESS, maxUint256],
+      });
 
-      const hash = await writeContractAsync({
-        address: BLOOM_BETTING_ADDRESS,
+      const betData = encodeFunctionData({
         abi: BLOOM_BETTING_ABI,
         functionName: 'placeBet',
         args: [directionEnum, amount],
-        account: address,
-        chain: base,
       });
 
-      setPendingTxHash(hash);
-      toast({ title: "Transaction Sent", description: "Waiting for confirmation..." });
+      const calls = allowance < amount
+        ? [
+            { to: BLOOM_TOKEN_ADDRESS, data: approveData },
+            { to: BLOOM_BETTING_ADDRESS, data: betData },
+          ]
+        : [{ to: BLOOM_BETTING_ADDRESS, data: betData }];
 
-      // Wait for confirmation
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      toast({ title: 'Confirm transaction...', description: 'Confirm in your wallet' });
 
-      const amountFormatted = formatUnits(amount, bloomDecimals);
+      const { id } = await sendCalls.mutateAsync({ calls });
+
+      toast({ title: 'Transaction Sent', description: 'Waiting for confirmation...' });
+      setIsAwaitingConfirmation(true);
+      await waitForCallsStatus(wagmiConfig, { id, timeout: 60_000 });
+
       toast({
-        title: "Bet Placed!",
-        description: `${Number(amountFormatted).toLocaleString()} BLOOM on ${direction.toUpperCase()}`
+        title: 'Bet Placed!',
+        description: `${Number(formatUnits(amount, bloomDecimals)).toLocaleString()} BLOOM on ${direction.toUpperCase()}`,
       });
 
-      // Refresh data
       refreshData();
       return true;
     } catch (error: any) {
-      console.error("Bet error:", error);
+      console.error('Bet error:', error);
       toast({
-        title: "Bet failed",
-        description: error.shortMessage || error.message || "Transaction failed",
-        variant: "destructive"
+        title: 'Bet failed',
+        description: error.shortMessage || error.message || 'Transaction failed',
+        variant: 'destructive',
       });
       return false;
     } finally {
       setIsBetting(false);
-      setPendingTxHash(undefined);
+      setIsAwaitingConfirmation(false);
     }
   }, [
     address,
     bloomBalance,
     bloomDecimals,
     allowance,
-    approveTokens,
-    writeContractAsync,
+    sendCalls,
     isBettingOpenData,
     hasBetData,
     minStakeData,
@@ -354,8 +348,8 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
     isBettingOpen: isBettingOpenData ?? false,
     timeRemaining: Number(timeRemainingData ?? 0n),
     minimumStake: minStakeData ?? 0n,
-    isLoading: isTxLoading,
-    isPending: isWritePending || isApproving || isBetting,
+    isLoading: isAwaitingConfirmation,
+    isPending: sendCalls.isPending || isApproving || isBetting || isAwaitingConfirmation,
     connect: handleConnect,
     disconnect,
     placeBet,

@@ -117,7 +117,6 @@ const Index = () => {
     endPriceRef.current = currentPrice;
   }, [currentPrice]);
 
-  // Handle on-chain bet placement
   const handlePlaceBet = useCallback(async (direction: "up" | "down", amount: number) => {
     // Check if user already placed a bet this round
     if (hasUserBetThisRound || currentBet !== null) {
