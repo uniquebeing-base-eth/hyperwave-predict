@@ -68,10 +68,11 @@ export const ERC20_ABI = [
   { inputs: [], name: "symbol", outputs: [{ internalType: "string", name: "", type: "string" }], stateMutability: "view", type: "function" }
 ] as const;
 
-// Direction enum matching the contract
+// Direction enum matching the contract (None=0, Up=1, Down=2)
 export enum Direction {
-  Up = 0,
-  Down = 1
+  None = 0,
+  Up = 1,
+  Down = 2
 }
 
 // BetResult enum matching the contract
