@@ -123,9 +123,14 @@ const Index = () => {
     if (hasUserBetThisRound || currentBet !== null) {
       return;
     }
-    
+
     // Check if betting is allowed
     if (currentPhase !== "betting") {
+      return;
+    }
+
+    // Check on-chain contract betting window
+    if (!contractBettingOpen) {
       return;
     }
 
@@ -136,10 +141,10 @@ const Index = () => {
 
     // Convert to bigint for contract using correct decimals
     const amountInWei = parseUnits(amount.toString(), bloomDecimals);
-    
+
     // Place bet on-chain
     const success = await onChainPlaceBet(direction, amountInWei);
-    
+
     if (success) {
       setCurrentBet({ direction, amount });
       playBetSound();
@@ -154,13 +159,22 @@ const Index = () => {
       };
       setRecentBets((prev) => [newBet, ...prev.slice(0, 9)]);
     }
-  }, [hasUserBetThisRound, currentBet, currentPhase, displayBloomBalanceNum, bloomDecimals, onChainPlaceBet, playBetSound]);
+  }, [
+    hasUserBetThisRound,
+    currentBet,
+    currentPhase,
+    contractBettingOpen,
+    displayBloomBalanceNum,
+    bloomDecimals,
+    onChainPlaceBet,
+    playBetSound,
+  ]);
 
   const handleResolutionComplete = useCallback(() => {
     // Determine result based on price movement
     const startPrice = startPriceRef.current;
     const endPrice = endPriceRef.current || currentPrice;
-    
+
     let result: "up" | "down" | "draw";
     if (endPrice > startPrice) {
       result = "up";
@@ -169,7 +183,7 @@ const Index = () => {
     } else {
       result = "draw"; // Draw = loss in HyperWave
     }
-    
+
     setRoundResult(result);
 
     if (currentBet) {
@@ -204,8 +218,9 @@ const Index = () => {
     }, 2000);
   }, [currentBet, currentPrice, playWinSound, playLoseSound, refreshData]);
 
-  // Calculate if betting is allowed (use local phase + contract state)
-  const isBettingOpen = currentPhase === "betting" && !hasUserBetThisRound;
+  // Calculate if betting is allowed (local phase + on-chain contract)
+  const isBettingOpen =
+    currentPhase === "betting" && (contractBettingOpen ?? false) && !hasUserBetThisRound;
 
   return (
     <>
