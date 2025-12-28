@@ -18,14 +18,11 @@ const UserStats = ({ ethBalance, bloomBalance, totalBets, wins, streak }: UserSt
   const winRate = totalBets > 0 ? Math.round((wins / totalBets) * 100) : 0;
 
   const handleShare = async () => {
-    if (user?.username) {
-      await shareStats({
-        username: user.username,
-        totalBets,
-        winRate,
-        streak,
-      });
-    }
+    await shareStats({
+      totalPlays: totalBets,
+      winRate,
+      streak,
+    });
   };
 
   const stats = [
@@ -106,7 +103,7 @@ const UserStats = ({ ethBalance, bloomBalance, totalBets, wins, streak }: UserSt
       </div>
 
       {/* Share Stats Button */}
-      {isInMiniApp && user?.username && (
+      {isInMiniApp && (
         <motion.div
           className="mt-4"
           initial={{ opacity: 0 }}
