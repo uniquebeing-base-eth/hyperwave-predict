@@ -6,6 +6,7 @@ import MainLayout from "@/components/MainLayout";
 import ActionPage from "@/pages/ActionPage";
 import RewardsPage from "@/pages/RewardsPage";
 import StatsPage from "@/pages/StatsPage";
+import LeaderboardPage from "@/pages/LeaderboardPage";
 import RoundResult from "@/components/RoundResult";
 import { useMiniAppPrompt } from "@/hooks/useMiniAppPrompt";
 import { useWagmiBetting } from "@/hooks/useWagmiBetting";
@@ -322,6 +323,7 @@ const Index = () => {
             }
           />
           <Route path="rewards" element={<RewardsPage rewards={rewards} daysPlayed={streak} />} />
+          <Route path="leaderboard" element={<LeaderboardPage />} />
           <Route
             path="stats"
             element={
