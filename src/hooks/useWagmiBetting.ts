@@ -1,10 +1,7 @@
-import { useAccount, useConnect, useDisconnect, useReadContract, useSendCalls } from 'wagmi';
+import { useAccount, useConnect, useDisconnect, useReadContract, useSendCalls, useWaitForCallsStatus } from 'wagmi';
 import { useState, useEffect, useCallback } from 'react';
 import { encodeFunctionData, formatUnits, maxUint256 } from 'viem';
-import { base } from 'wagmi/chains';
-import { waitForCallsStatus } from '@wagmi/core';
 import {
-  wagmiConfig,
   BLOOM_BETTING_ADDRESS,
   BLOOM_TOKEN_ADDRESS,
   BLOOM_BETTING_ABI,
@@ -43,11 +40,14 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
-  const sendCalls = useSendCalls();
+  const { data: sendCallsData, isPending: isSendingCalls, sendCalls, reset: resetSendCalls } = useSendCalls();
+
+  const { isLoading: isConfirming } = useWaitForCallsStatus({
+    id: sendCallsData?.id,
+  });
 
   const [isApproving, setIsApproving] = useState(false);
   const [isBetting, setIsBetting] = useState(false);
-  const [isAwaitingConfirmation, setIsAwaitingConfirmation] = useState(false);
 
   // Read token decimals
   const { data: decimalsData } = useReadContract({
@@ -165,7 +165,6 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
     refetchTime();
   }, [refetchBalance, refetchAllowance, refetchRound, refetchStats, refetchHasBet, refetchBettingOpen, refetchTime]);
 
-  // Approve tokens
   const approveTokens = useCallback(async (_amount: bigint): Promise<boolean> => {
     if (!address) return false;
 
@@ -179,16 +178,16 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
         args: [BLOOM_BETTING_ADDRESS, maxUint256],
       });
 
-      const { id } = await sendCalls.mutateAsync({
+      sendCalls({
         calls: [{ to: BLOOM_TOKEN_ADDRESS, data: approveData }],
       });
 
-      toast({ title: 'Transaction Sent', description: 'Waiting for confirmation...' });
-      setIsAwaitingConfirmation(true);
-      await waitForCallsStatus(wagmiConfig, { id, timeout: 60_000 });
-
+      // Wait a bit for transaction to be sent and confirmed
+      await new Promise((resolve) => setTimeout(resolve, 8000));
       await refetchAllowance();
+
       toast({ title: 'Approved!', description: 'You can now place your bet' });
+      resetSendCalls();
       return true;
     } catch (error: any) {
       console.error('Approval error:', error);
@@ -197,12 +196,12 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
         description: error.shortMessage || error.message || 'Transaction rejected',
         variant: 'destructive',
       });
+      resetSendCalls();
       return false;
     } finally {
       setIsApproving(false);
-      setIsAwaitingConfirmation(false);
     }
-  }, [address, sendCalls, refetchAllowance]);
+  }, [address, sendCalls, refetchAllowance, resetSendCalls]);
 
   const placeBet = useCallback(async (direction: 'up' | 'down', amount: bigint): Promise<boolean> => {
     if (!address) {
@@ -280,17 +279,17 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
 
       toast({ title: 'Confirm transaction...', description: 'Confirm in your wallet' });
 
-      const { id } = await sendCalls.mutateAsync({ calls });
+      sendCalls({ calls });
 
-      toast({ title: 'Transaction Sent', description: 'Waiting for confirmation...' });
-      setIsAwaitingConfirmation(true);
-      await waitForCallsStatus(wagmiConfig, { id, timeout: 60_000 });
+      // Wait for transaction to be sent and confirmed
+      await new Promise((resolve) => setTimeout(resolve, 10000));
 
       toast({
         title: 'Bet Placed!',
         description: `${Number(formatUnits(amount, bloomDecimals)).toLocaleString()} BLOOM on ${direction.toUpperCase()}`,
       });
 
+      resetSendCalls();
       refreshData();
       return true;
     } catch (error: any) {
@@ -300,10 +299,10 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
         description: error.shortMessage || error.message || 'Transaction failed',
         variant: 'destructive',
       });
+      resetSendCalls();
       return false;
     } finally {
       setIsBetting(false);
-      setIsAwaitingConfirmation(false);
     }
   }, [
     address,
@@ -315,6 +314,7 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
     hasBetData,
     minStakeData,
     refreshData,
+    resetSendCalls,
   ]);
 
 
@@ -348,8 +348,8 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
     isBettingOpen: isBettingOpenData ?? false,
     timeRemaining: Number(timeRemainingData ?? 0n),
     minimumStake: minStakeData ?? 0n,
-    isLoading: isAwaitingConfirmation,
-    isPending: sendCalls.isPending || isApproving || isBetting || isAwaitingConfirmation,
+    isLoading: isConfirming,
+    isPending: isSendingCalls || isApproving || isBetting || isConfirming,
     connect: handleConnect,
     disconnect,
     placeBet,
