@@ -31,7 +31,7 @@ const RoundResult = ({
       await shareWin({
         amount,
         result,
-        username: user?.username,
+        payout: amount * 2,
       });
     }
   };

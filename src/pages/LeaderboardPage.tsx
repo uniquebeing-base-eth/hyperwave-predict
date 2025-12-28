@@ -171,15 +171,11 @@ const LeaderboardPage = () => {
   };
 
   const handleSharePosition = async (entry: LeaderboardEntry, type: 'wins' | 'profit') => {
-    const username = entry.profile?.username || user?.username;
-    if (!username) return;
-    
     const value = type === 'wins' 
       ? `${Number(entry.stats.totalWins)}`
       : formatProfit(entry.stats.totalProfits);
     
     await shareLeaderboard({
-      username,
       rank: entry.rank,
       type,
       value,
