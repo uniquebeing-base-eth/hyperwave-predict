@@ -7,16 +7,28 @@ import { BLOOM_BETTING_ABI, BLOOM_BETTING_ADDRESS, UserStats } from "@/contracts
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { supabase } from "@/integrations/supabase/client";
+
+interface FarcasterProfile {
+  address: string;
+  fid: number | null;
+  username: string | null;
+  displayName: string | null;
+  pfpUrl: string | null;
+}
 
 interface LeaderboardEntry {
   address: string;
   stats: UserStats;
   rank: number;
+  profile?: FarcasterProfile;
 }
 
 const LeaderboardPage = () => {
   const [players, setPlayers] = useState<string[]>([]);
   const [playerStats, setPlayerStats] = useState<Map<string, UserStats>>(new Map());
+  const [playerProfiles, setPlayerProfiles] = useState<Map<string, FarcasterProfile>>(new Map());
   const [loading, setLoading] = useState(true);
 
   // Fetch all unique players from BetPlaced events
@@ -61,6 +73,25 @@ const LeaderboardPage = () => {
         }
         
         setPlayerStats(statsMap);
+        
+        // Fetch Farcaster profiles for all players
+        if (uniquePlayers.length > 0) {
+          try {
+            const { data, error } = await supabase.functions.invoke('get-farcaster-profiles', {
+              body: { addresses: uniquePlayers }
+            });
+            
+            if (!error && data?.profiles) {
+              const profilesMap = new Map<string, FarcasterProfile>();
+              for (const profile of data.profiles) {
+                profilesMap.set(profile.address.toLowerCase(), profile);
+              }
+              setPlayerProfiles(profilesMap);
+            }
+          } catch (err) {
+            console.error("Error fetching Farcaster profiles:", err);
+          }
+        }
       } catch (error) {
         console.error("Error fetching leaderboard data:", error);
       } finally {
@@ -86,11 +117,12 @@ const LeaderboardPage = () => {
           lastPlayedDay: 0n,
         },
         rank: 0,
+        profile: playerProfiles.get(address.toLowerCase()),
       }))
       .filter(entry => entry.stats.totalBets > 0n)
       .sort((a, b) => Number(b.stats.totalWins - a.stats.totalWins))
       .map((entry, idx) => ({ ...entry, rank: idx + 1 }));
-  }, [players, playerStats]);
+  }, [players, playerStats, playerProfiles]);
 
   // Sort by profit
   const profitLeaderboard = useMemo((): LeaderboardEntry[] => {
@@ -107,11 +139,12 @@ const LeaderboardPage = () => {
           lastPlayedDay: 0n,
         },
         rank: 0,
+        profile: playerProfiles.get(address.toLowerCase()),
       }))
       .filter(entry => entry.stats.totalBets > 0n)
       .sort((a, b) => Number(b.stats.totalProfits - a.stats.totalProfits))
       .map((entry, idx) => ({ ...entry, rank: idx + 1 }));
-  }, [players, playerStats]);
+  }, [players, playerStats, playerProfiles]);
 
   const formatAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -166,9 +199,26 @@ const LeaderboardPage = () => {
                   <div className="w-8 flex justify-center">
                     {getRankIcon(entry.rank)}
                   </div>
+                  <Avatar className="w-10 h-10 border border-border/50">
+                    {entry.profile?.pfpUrl ? (
+                      <AvatarImage src={entry.profile.pfpUrl} alt={entry.profile.username || 'Player'} />
+                    ) : null}
+                    <AvatarFallback className="bg-primary/20 text-primary text-xs">
+                      {entry.address.slice(2, 4).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
                   <div>
-                    <p className="font-mono text-sm">{formatAddress(entry.address)}</p>
+                    {entry.profile?.username ? (
+                      <p className="font-medium text-sm">
+                        {entry.profile.displayName || `@${entry.profile.username}`}
+                      </p>
+                    ) : (
+                      <p className="font-mono text-sm">{formatAddress(entry.address)}</p>
+                    )}
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      {entry.profile?.username && (
+                        <span className="text-primary/70">@{entry.profile.username}</span>
+                      )}
                       <span>{Number(entry.stats.totalBets)} bets</span>
                       {entry.stats.currentStreak > 0n && (
                         <span className="flex items-center gap-1 text-orange-400">
