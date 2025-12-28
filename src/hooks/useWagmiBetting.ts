@@ -210,14 +210,43 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
     try {
       setIsBetting(true);
 
+      // Contract-side prechecks (avoid opaque "missing revert data" errors)
+      if (!(isBettingOpenData ?? false)) {
+        toast({
+          title: "Betting closed",
+          description: "Wait for the next round to start.",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      if (hasBetData ?? false) {
+        toast({
+          title: "Already bet this round",
+          description: "You can only place one bet per round.",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      const minStake = minStakeData ?? 0n;
+      if (minStake > 0n && amount < minStake) {
+        toast({
+          title: "Stake too low",
+          description: `Minimum stake is ${Number(formatUnits(minStake, bloomDecimals)).toLocaleString()} BLOOM.`,
+          variant: "destructive",
+        });
+        return false;
+      }
+
       // Check balance
       if (bloomBalance < amount) {
         const balanceFormatted = formatUnits(bloomBalance, bloomDecimals);
         const amountFormatted = formatUnits(amount, bloomDecimals);
-        toast({ 
-          title: "Insufficient Balance", 
-          description: `You have ${Number(balanceFormatted).toLocaleString()} BLOOM but need ${Number(amountFormatted).toLocaleString()}`, 
-          variant: "destructive" 
+        toast({
+          title: "Insufficient Balance",
+          description: `You have ${Number(balanceFormatted).toLocaleString()} BLOOM but need ${Number(amountFormatted).toLocaleString()}`,
+          variant: "destructive",
         });
         return false;
       }
@@ -249,9 +278,9 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
       await new Promise(resolve => setTimeout(resolve, 5000));
 
       const amountFormatted = formatUnits(amount, bloomDecimals);
-      toast({ 
-        title: "Bet Placed!", 
-        description: `${Number(amountFormatted).toLocaleString()} BLOOM on ${direction.toUpperCase()}` 
+      toast({
+        title: "Bet Placed!",
+        description: `${Number(amountFormatted).toLocaleString()} BLOOM on ${direction.toUpperCase()}`
       });
 
       // Refresh data
@@ -259,17 +288,28 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
       return true;
     } catch (error: any) {
       console.error("Bet error:", error);
-      toast({ 
-        title: "Bet failed", 
-        description: error.shortMessage || error.message || "Transaction failed", 
-        variant: "destructive" 
+      toast({
+        title: "Bet failed",
+        description: error.shortMessage || error.message || "Transaction failed",
+        variant: "destructive"
       });
       return false;
     } finally {
       setIsBetting(false);
       setPendingTxHash(undefined);
     }
-  }, [address, bloomBalance, bloomDecimals, allowance, approveTokens, writeContractAsync]);
+  }, [
+    address,
+    bloomBalance,
+    bloomDecimals,
+    allowance,
+    approveTokens,
+    writeContractAsync,
+    isBettingOpenData,
+    hasBetData,
+    minStakeData,
+    refreshData,
+  ]);
 
   // Refresh all data
   const refreshData = useCallback(() => {
