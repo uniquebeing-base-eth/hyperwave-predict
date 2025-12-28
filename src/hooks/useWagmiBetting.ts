@@ -82,7 +82,7 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
     address: BLOOM_BETTING_ADDRESS,
     abi: BLOOM_BETTING_ABI,
     functionName: 'getCurrentRound',
-    query: { refetchInterval: 4000 },
+    query: { refetchInterval: 6000 },
   });
 
   // Read user stats
@@ -91,7 +91,7 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
     abi: BLOOM_BETTING_ABI,
     functionName: 'getUserStats',
     args: address ? [address] : undefined,
-    query: { enabled: !!address },
+    query: { enabled: !!address, refetchInterval: 12000 },
   });
 
   // Read has user bet this round
@@ -100,7 +100,7 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
     abi: BLOOM_BETTING_ABI,
     functionName: 'hasUserBetThisRound',
     args: address ? [address] : undefined,
-    query: { enabled: !!address },
+    query: { enabled: !!address, refetchInterval: 6000 },
   });
 
   // Read is betting open
@@ -108,7 +108,7 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
     address: BLOOM_BETTING_ADDRESS,
     abi: BLOOM_BETTING_ABI,
     functionName: 'isBettingOpen',
-    query: { refetchInterval: 2000 },
+    query: { refetchInterval: 6000 },
   });
 
   // Read time remaining
@@ -116,7 +116,7 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
     address: BLOOM_BETTING_ADDRESS,
     abi: BLOOM_BETTING_ABI,
     functionName: 'getTimeRemaining',
-    query: { refetchInterval: 2000 },
+    query: { refetchInterval: 6000 },
   });
 
   // Read minimum stake
@@ -321,11 +321,8 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
   ]);
 
 
-  // Auto-refresh every ~4 seconds (not a divisor of 60s rounds, avoids sampling only the locked window)
-  useEffect(() => {
-    const interval = setInterval(refreshData, 4000);
-    return () => clearInterval(interval);
-  }, [refreshData]);
+  // NOTE: Avoid extra polling here; each read contract query already has its own refetch interval.
+
 
   // Auto-connect on mount
   useEffect(() => {

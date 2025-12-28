@@ -87,7 +87,7 @@ const Index = () => {
     abi: BLOOM_BETTING_ABI,
     functionName: "getRound",
     args: betRoundId ? [betRoundId] : undefined,
-    query: { enabled: !!betRoundId, refetchInterval: 2000 },
+    query: { enabled: !!betRoundId, refetchInterval: 5000 },
   });
   // Odds (based on pool distribution from contract)
   const upPool = currentRound ? Number(currentRound.totalUpPool) : 50;
