@@ -7,60 +7,133 @@ interface GameTimerProps {
   onPhaseChange: (phase: GamePhase) => void;
   onResolutionComplete: () => void;
   onPriceSnapshot: () => void;
+  /** Seconds remaining until round end from the contract (0..ROUND_DURATION) */
+  contractTimeRemaining?: number;
+  /** Seconds before round end when betting locks on-chain */
+  bettingCutoff?: number;
+  /** Total round duration in seconds */
+  roundDuration?: number;
 }
 
 // HyperWave timing: 1-minute rounds
-// 50s betting, 10s locked, then instant resolution
-const BETTING_DURATION = 50; // 50 seconds for betting
-const LOCK_DURATION = 10; // 10 seconds locked (no bets allowed)
-const TOTAL_ROUND_DURATION = 60; // Full round is 60s
+// Contract rules: 60s rounds, betting closes 10s before end
+const DEFAULT_ROUND_DURATION = 60;
+const DEFAULT_BETTING_CUTOFF = 10;
 
-const GameTimer = ({ onPhaseChange, onResolutionComplete, onPriceSnapshot }: GameTimerProps) => {
+const GameTimer = ({
+  onPhaseChange,
+  onResolutionComplete,
+  onPriceSnapshot,
+  contractTimeRemaining,
+  bettingCutoff = DEFAULT_BETTING_CUTOFF,
+  roundDuration = DEFAULT_ROUND_DURATION,
+}: GameTimerProps) => {
+  const bettingDuration = Math.max(roundDuration - bettingCutoff, 1);
+
   const [phase, setPhase] = useState<GamePhase>("betting");
-  const [timeLeft, setTimeLeft] = useState(BETTING_DURATION);
+  const [timeLeft, setTimeLeft] = useState(bettingDuration);
   const hasResolved = useRef(false);
 
   const getTotalDuration = useCallback(() => {
     switch (phase) {
-      case "betting": return BETTING_DURATION;
-      case "locked": return LOCK_DURATION;
-      case "resolving": return 3; // Just 3s to show result then restart
+      case "betting":
+        return bettingDuration;
+      case "locked":
+        return bettingCutoff;
+      case "resolving":
+        return 3; // Just 3s to show result then restart
     }
-  }, [phase]);
+  }, [phase, bettingDuration, bettingCutoff]);
 
+  // Contract-synced mode: derive phase + timeLeft directly from on-chain timeRemaining
   useEffect(() => {
+    if (contractTimeRemaining === undefined || contractTimeRemaining === null) return;
+
+    const t = Math.max(0, Math.floor(contractTimeRemaining));
+
+    const nextPhase: GamePhase =
+      t === 0 ? "resolving" : t <= bettingCutoff ? "locked" : "betting";
+
+    // Update phase if needed
+    if (nextPhase !== phase) {
+      setPhase(nextPhase);
+      onPhaseChange(nextPhase);
+
+      if (nextPhase === "resolving") {
+        onPriceSnapshot();
+        hasResolved.current = false;
+      }
+
+      if (nextPhase === "betting") {
+        hasResolved.current = false;
+      }
+    }
+
+    if (nextPhase === "betting") {
+      setTimeLeft(Math.max(t - bettingCutoff, 0));
+    } else if (nextPhase === "locked") {
+      setTimeLeft(t);
+    }
+  }, [contractTimeRemaining, bettingCutoff, onPhaseChange, onPriceSnapshot, phase]);
+
+  // Local timer mode (fallback): keeps original behavior if contract time isn't provided
+  useEffect(() => {
+    if (contractTimeRemaining !== undefined && contractTimeRemaining !== null) return;
+
     const interval = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          // Phase transition
           if (phase === "betting") {
             setPhase("locked");
             onPhaseChange("locked");
-            return LOCK_DURATION;
-          } else if (phase === "locked") {
-            // Locked period over - take price snapshot and resolve immediately
+            return bettingCutoff;
+          }
+
+          if (phase === "locked") {
             onPriceSnapshot();
             setPhase("resolving");
             onPhaseChange("resolving");
             hasResolved.current = false;
-            return 3; // Brief resolving display
-          } else {
-            // Resolution complete - instant settlement happened, start new round
-            if (!hasResolved.current) {
-              onResolutionComplete();
-              hasResolved.current = true;
-            }
-            setPhase("betting");
-            onPhaseChange("betting");
-            return BETTING_DURATION;
+            return 3;
           }
+
+          if (!hasResolved.current) {
+            onResolutionComplete();
+            hasResolved.current = true;
+          }
+
+          setPhase("betting");
+          onPhaseChange("betting");
+          return bettingDuration;
+        }
+
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [phase, onPhaseChange, onResolutionComplete, onPriceSnapshot, bettingCutoff, bettingDuration, contractTimeRemaining]);
+
+  // Resolving display countdown (both modes)
+  useEffect(() => {
+    if (phase !== "resolving") return;
+
+    setTimeLeft(3);
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          if (!hasResolved.current) {
+            onResolutionComplete();
+            hasResolved.current = true;
+          }
+          return 0;
         }
         return prev - 1;
       });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [phase, onPhaseChange, onResolutionComplete, onPriceSnapshot]);
+  }, [phase, onResolutionComplete]);
 
   const progress = (timeLeft / getTotalDuration()) * 100;
   const circumference = 2 * Math.PI * 45;
@@ -84,14 +157,6 @@ const GameTimer = ({ onPhaseChange, onResolutionComplete, onPriceSnapshot }: Gam
       case "resolving": return "hsl(var(--success))";
     }
   };
-
-  // Calculate total round time remaining
-  const totalTimeInRound = phase === "betting" 
-    ? timeLeft 
-    : phase === "locked" 
-      ? timeLeft 
-      : timeLeft;
-
   return (
     <div className="relative flex flex-col items-center">
       {/* Phase Label */}

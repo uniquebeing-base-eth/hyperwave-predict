@@ -37,6 +37,7 @@ const Index = () => {
     userStats,
     hasUserBetThisRound,
     isBettingOpen: contractBettingOpen,
+    timeRemaining,
     minimumStake,
     isPending,
     connect,
@@ -235,6 +236,7 @@ const Index = () => {
                 currentPhase={currentPhase}
                 roundNumber={currentRound ? Number(currentRound.roundId) : roundNumber}
                 minimumStake={minimumStakeNum || 100000}
+                contractTimeRemaining={timeRemaining}
                 hasUserBetThisRound={hasUserBetThisRound}
                 isPending={isPending}
                 isConnected={isConnected}
