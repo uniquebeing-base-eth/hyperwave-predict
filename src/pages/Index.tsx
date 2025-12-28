@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import { formatUnits, parseUnits } from "viem";
+import { useReadContract } from "wagmi";
 import MainLayout from "@/components/MainLayout";
 import ActionPage from "@/pages/ActionPage";
 import RewardsPage from "@/pages/RewardsPage";
@@ -13,6 +14,7 @@ import { GamePhase } from "@/components/GameTimer";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { BLOOM_BETTING_ABI, BLOOM_BETTING_ADDRESS, Direction } from "@/lib/wagmiConfig";
 
 interface Bet {
   id: string;
@@ -77,6 +79,16 @@ const Index = () => {
   } | null>(null);
   const [recentBets, setRecentBets] = useState<Bet[]>([]);
 
+  // Watch the specific round the user bet on so we don't miss the result if the contract
+  // immediately rolls into the next round.
+  const betRoundId = currentBet?.roundId;
+  const { data: betRoundData } = useReadContract({
+    address: BLOOM_BETTING_ADDRESS,
+    abi: BLOOM_BETTING_ABI,
+    functionName: "getRound",
+    args: betRoundId ? [betRoundId] : undefined,
+    query: { enabled: !!betRoundId, refetchInterval: 2000 },
+  });
   // Odds (based on pool distribution from contract)
   const upPool = currentRound ? Number(currentRound.totalUpPool) : 50;
   const downPool = currentRound ? Number(currentRound.totalDownPool) : 50;
@@ -233,17 +245,22 @@ const Index = () => {
       .catch((e) => console.error("oracle-automation invoke failed:", e));
   }, [currentRound, timeRemaining]);
 
-  // Show results ONLY when the contract marks the round as resolved.
+  // Show results ONLY when the bet's round is resolved on-chain.
   useEffect(() => {
-    if (!currentRound || !currentBet) return;
-    if (!currentRound.resolved) return;
-    if (currentBet.roundId !== currentRound.roundId) return;
+    if (!currentBet || !betRoundData) return;
 
-    if (handledSettledRoundRef.current === currentRound.roundId) return;
-    handledSettledRoundRef.current = currentRound.roundId;
+    const round = betRoundData as any;
+    if (!round.resolved) return;
+
+    if (handledSettledRoundRef.current === currentBet.roundId) return;
+    handledSettledRoundRef.current = currentBet.roundId;
 
     const result: "up" | "down" | "draw" =
-      currentRound.result === 1n ? "up" : currentRound.result === 2n ? "down" : "draw";
+      round.result === Direction.Up
+        ? "up"
+        : round.result === Direction.Down
+          ? "down"
+          : "draw";
 
     setRoundResult(result);
 
@@ -268,7 +285,7 @@ const Index = () => {
       startPriceRef.current = 0;
       endPriceRef.current = 0;
     }, 2000);
-  }, [currentRound, currentBet, playWinSound, playLoseSound, refreshData]);
+  }, [betRoundData, currentBet, playWinSound, playLoseSound, refreshData]);
 
   // Calculate if betting is allowed - rely ONLY on contract state, not local timer
   const isBettingOpen = (contractBettingOpen ?? false) && !hasUserBetThisRound;

@@ -96,18 +96,27 @@ serve(async (req) => {
       action = "startRound";
       
     } else if (!resolved && timeRemaining === 0n) {
-      // Settle the current round
+      // Settle the current round, then immediately start the next round (keeps rounds continuous)
       console.log(`Settling round ${currentRoundId} with price:`, ethPrice.toString());
-      
-      const tx = await bettingContract.settleRound(currentRoundId, ethPrice);
-      console.log(`Transaction sent: ${tx.hash}`);
-      
-      const receipt = await tx.wait();
-      console.log(`Transaction confirmed in block ${receipt?.blockNumber}`);
-      
-      txHash = tx.hash;
+
+      const settleTx = await bettingContract.settleRound(currentRoundId, ethPrice);
+      console.log(`Transaction sent: ${settleTx.hash}`);
+
+      const settleReceipt = await settleTx.wait();
+      console.log(`Transaction confirmed in block ${settleReceipt?.blockNumber}`);
+
+      txHash = settleTx.hash;
       action = "settleRound";
-      
+
+      // Start next round right away using the same latest price as start price
+      console.log("Starting next round immediately with price:", ethPrice.toString());
+
+      const startTx = await bettingContract.startRound(ethPrice);
+      console.log(`Transaction sent: ${startTx.hash}`);
+
+      const startReceipt = await startTx.wait();
+      console.log(`Transaction confirmed in block ${startReceipt?.blockNumber}`);
+
     } else {
       console.log(`Round ${currentRoundId} is active with ${timeRemaining}s remaining. No action needed.`);
     }
