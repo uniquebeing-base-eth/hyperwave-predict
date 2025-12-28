@@ -11,6 +11,8 @@ import { useWagmiBetting } from "@/hooks/useWagmiBetting";
 import { useNeynarBalances } from "@/hooks/useNeynarBalances";
 import { GamePhase } from "@/components/GameTimer";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 interface Bet {
   id: string;
@@ -23,14 +25,13 @@ interface Bet {
 const Index = () => {
   // Initialize mini app prompt
   useMiniAppPrompt();
-  
+
   // Sound effects
   const { preloadSounds, playWinSound, playLoseSound, playBetSound } = useSoundEffects();
-  
+
   // On-chain betting hook using wagmi + Farcaster connector
   const {
     isConnected,
-    userAddress,
     bloomBalance,
     bloomDecimals,
     currentRound,
@@ -58,17 +59,22 @@ const Index = () => {
   // Prefer Neynar-derived balances inside Farcaster mini app when available
   const displayBloomBalanceNum = neynarBalances.address ? neynarBloomNum : bloomBalanceNum;
   const displayEthBalanceNum = neynarBalances.address ? neynarEthNum : 0;
+
   // Preload sounds on mount
   useEffect(() => {
     preloadSounds();
   }, [preloadSounds]);
-  
+
   // Game state
   const [currentPhase, setCurrentPhase] = useState<GamePhase>("betting");
-  const [roundNumber, setRoundNumber] = useState(1);
+  const [roundNumber] = useState(1);
 
   // Betting state
-  const [currentBet, setCurrentBet] = useState<{ direction: "up" | "down"; amount: number } | null>(null);
+  const [currentBet, setCurrentBet] = useState<{
+    roundId: bigint;
+    direction: "up" | "down";
+    amount: number;
+  } | null>(null);
   const [recentBets, setRecentBets] = useState<Bet[]>([]);
 
   // Odds (based on pool distribution from contract)
@@ -78,10 +84,21 @@ const Index = () => {
   const upOdds = totalPool > 0 ? Math.round((upPool / totalPool) * 100) : 50;
   const downOdds = totalPool > 0 ? Math.round((downPool / totalPool) * 100) : 50;
 
-  // Price state from real ETH data
+  // Price state from real ETH data (visual only)
   const [currentPrice, setCurrentPrice] = useState(0);
   const startPriceRef = useRef<number>(0);
   const endPriceRef = useRef<number>(0);
+
+  // Settlement + UI sync helpers
+  const lastOracleActionRef = useRef<
+    | {
+        roundId: bigint;
+        stage: "settle" | "start";
+        at: number;
+      }
+    | null
+  >(null);
+  const handledSettledRoundRef = useRef<bigint | null>(null);
 
   // Result modal
   const [showResult, setShowResult] = useState(false);
@@ -93,124 +110,165 @@ const Index = () => {
   const streak = userStats ? Number(userStats.currentStreak) : 0;
   const rewards = totalBets * 1000; // Estimated rewards
 
-  const handlePriceUpdate = useCallback((price: number, change: number) => {
-    setCurrentPrice(price);
-    
-    // Set start price when betting phase begins
-    if (currentPhase === "betting" && startPriceRef.current === 0) {
-      startPriceRef.current = price;
-    }
-  }, [currentPhase]);
+  const handlePriceUpdate = useCallback(
+    (price: number) => {
+      setCurrentPrice(price);
 
-  const handlePhaseChange = useCallback((phase: GamePhase) => {
-    setCurrentPhase(phase);
-    
-    if (phase === "betting") {
-      // New round starting
-      startPriceRef.current = currentPrice;
-      setRoundNumber(prev => prev + 1);
-      setCurrentBet(null);
-      refreshData(); // Refresh contract data on new round
-    }
-  }, [currentPrice, refreshData]);
+      // Set start price when betting phase begins (visual only)
+      if (currentPhase === "betting" && startPriceRef.current === 0) {
+        startPriceRef.current = price;
+      }
+    },
+    [currentPhase]
+  );
+
+  const handlePhaseChange = useCallback(
+    (phase: GamePhase) => {
+      setCurrentPhase(phase);
+
+      if (phase === "betting") {
+        // New round starting (visual only)
+        startPriceRef.current = currentPrice;
+        refreshData();
+      }
+    },
+    [currentPrice, refreshData]
+  );
 
   const handlePriceSnapshot = useCallback(() => {
     endPriceRef.current = currentPrice;
   }, [currentPrice]);
 
-  const handlePlaceBet = useCallback(async (direction: "up" | "down", amount: number) => {
-    // Check if user already placed a bet this round
-    if (hasUserBetThisRound || currentBet !== null) {
+  const handlePlaceBet = useCallback(
+    async (direction: "up" | "down", amount: number) => {
+      // Check if user already placed a bet this round
+      if (hasUserBetThisRound || currentBet !== null) {
+        return;
+      }
+
+      // Check on-chain contract betting window (ignore local phase)
+      if (!contractBettingOpen) {
+        return;
+      }
+
+      // Check wallet balance (use Neynar display balance in Farcaster)
+      if (amount > displayBloomBalanceNum) {
+        return;
+      }
+
+      // Convert to bigint for contract using correct decimals
+      const amountInWei = parseUnits(amount.toString(), bloomDecimals);
+
+      // Place bet on-chain
+      const success = await onChainPlaceBet(direction, amountInWei);
+
+      if (success) {
+        const activeRoundId = currentRound?.roundId ?? 0n;
+        setCurrentBet({ roundId: activeRoundId, direction, amount });
+        playBetSound();
+
+        // Add to recent bets as pending
+        const newBet: Bet = {
+          id: Date.now().toString(),
+          direction,
+          amount,
+          result: "pending",
+          timestamp: new Date(),
+        };
+        setRecentBets((prev) => [newBet, ...prev.slice(0, 9)]);
+      }
+    },
+    [
+      hasUserBetThisRound,
+      currentBet,
+      contractBettingOpen,
+      displayBloomBalanceNum,
+      bloomDecimals,
+      onChainPlaceBet,
+      playBetSound,
+      currentRound?.roundId,
+    ]
+  );
+
+  // If a round is sitting at 0s (ended) for a long time, trigger backend automation
+  // so settlement + next round start happens promptly.
+  useEffect(() => {
+    if (!currentRound) return;
+    if (timeRemaining !== 0) return;
+
+    const stage: "settle" | "start" = currentRound.resolved ? "start" : "settle";
+    const last = lastOracleActionRef.current;
+
+    // Debounce: one call per round+stage every ~25s max
+    if (
+      last &&
+      last.roundId === currentRound.roundId &&
+      last.stage === stage &&
+      Date.now() - last.at < 25_000
+    ) {
       return;
     }
 
-    // Check on-chain contract betting window (ignore local phase)
-    if (!contractBettingOpen) {
-      return;
-    }
+    lastOracleActionRef.current = {
+      roundId: currentRound.roundId,
+      stage,
+      at: Date.now(),
+    };
 
-    // Check wallet balance (use Neynar display balance in Farcaster)
-    if (amount > displayBloomBalanceNum) {
-      return;
-    }
+    supabase.functions
+      .invoke("oracle-automation")
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("oracle-automation invoke error:", error);
+          return;
+        }
 
-    // Convert to bigint for contract using correct decimals
-    const amountInWei = parseUnits(amount.toString(), bloomDecimals);
+        if (data?.action && data.action !== "none") {
+          toast({
+            title: "Syncing round...",
+            description: data.action === "settleRound" ? "Settling on-chain" : "Starting next round",
+          });
+        }
+      })
+      .catch((e) => console.error("oracle-automation invoke failed:", e));
+  }, [currentRound, timeRemaining]);
 
-    // Place bet on-chain
-    const success = await onChainPlaceBet(direction, amountInWei);
+  // Show results ONLY when the contract marks the round as resolved.
+  useEffect(() => {
+    if (!currentRound || !currentBet) return;
+    if (!currentRound.resolved) return;
+    if (currentBet.roundId !== currentRound.roundId) return;
 
-    if (success) {
-      setCurrentBet({ direction, amount });
-      playBetSound();
+    if (handledSettledRoundRef.current === currentRound.roundId) return;
+    handledSettledRoundRef.current = currentRound.roundId;
 
-      // Add to recent bets as pending
-      const newBet: Bet = {
-        id: Date.now().toString(),
-        direction,
-        amount,
-        result: "pending",
-        timestamp: new Date(),
-      };
-      setRecentBets((prev) => [newBet, ...prev.slice(0, 9)]);
-    }
-  }, [
-    hasUserBetThisRound,
-    currentBet,
-    contractBettingOpen,
-    displayBloomBalanceNum,
-    bloomDecimals,
-    onChainPlaceBet,
-    playBetSound,
-  ]);
-
-  const handleResolutionComplete = useCallback(() => {
-    // Determine result based on price movement
-    const startPrice = startPriceRef.current;
-    const endPrice = endPriceRef.current || currentPrice;
-
-    let result: "up" | "down" | "draw";
-    if (endPrice > startPrice) {
-      result = "up";
-    } else if (endPrice < startPrice) {
-      result = "down";
-    } else {
-      result = "draw"; // Draw = loss in HyperWave
-    }
+    const result: "up" | "down" | "draw" =
+      currentRound.result === 1n ? "up" : currentRound.result === 2n ? "down" : "draw";
 
     setRoundResult(result);
 
-    if (currentBet) {
-      const isWin = result === currentBet.direction;
-
-      if (isWin) {
-        playWinSound();
-      } else {
-        playLoseSound();
-      }
-
-      // Update recent bets - draws count as losses
-      setRecentBets((prev) =>
-        prev.map((bet) =>
-          bet.result === "pending"
-            ? { ...bet, result: isWin ? "win" : "lose" }
-            : bet
-        )
-      );
-
-      setShowResult(true);
+    const isWin = result !== "draw" && result === currentBet.direction;
+    if (isWin) {
+      playWinSound();
+    } else {
+      playLoseSound();
     }
 
-    // Refresh contract data
+    setRecentBets((prev) =>
+      prev.map((bet) =>
+        bet.result === "pending" ? { ...bet, result: isWin ? "win" : "lose" } : bet
+      )
+    );
+
+    setShowResult(true);
     refreshData();
 
-    // Reset for next round
     setTimeout(() => {
       setCurrentBet(null);
       startPriceRef.current = 0;
       endPriceRef.current = 0;
     }, 2000);
-  }, [currentBet, currentPrice, playWinSound, playLoseSound, refreshData]);
+  }, [currentRound, currentBet, playWinSound, playLoseSound, refreshData]);
 
   // Calculate if betting is allowed - rely ONLY on contract state, not local timer
   const isBettingOpen = (contractBettingOpen ?? false) && !hasUserBetThisRound;
@@ -230,7 +288,7 @@ const Index = () => {
                 recentBets={recentBets}
                 onPlaceBet={handlePlaceBet}
                 onPhaseChange={handlePhaseChange}
-                onResolutionComplete={handleResolutionComplete}
+                onResolutionComplete={() => undefined}
                 onPriceSnapshot={handlePriceSnapshot}
                 onPriceUpdate={handlePriceUpdate}
                 currentPhase={currentPhase}
@@ -273,3 +331,4 @@ const Index = () => {
 };
 
 export default Index;
+
