@@ -26,6 +26,7 @@ interface ActionPageProps {
   currentPhase: GamePhase;
   roundNumber: number;
   minimumStake: number;
+  contractTimeRemaining?: number;
   hasUserBetThisRound?: boolean;
   isPending?: boolean;
   isConnected?: boolean;
@@ -46,6 +47,7 @@ const ActionPage = ({
   currentPhase,
   roundNumber,
   minimumStake,
+  contractTimeRemaining,
   hasUserBetThisRound = false,
   isPending = false,
   isConnected = true,
@@ -92,6 +94,9 @@ const ActionPage = ({
           onPhaseChange={onPhaseChange}
           onResolutionComplete={onResolutionComplete}
           onPriceSnapshot={onPriceSnapshot}
+          contractTimeRemaining={contractTimeRemaining}
+          roundDuration={60}
+          bettingCutoff={10}
         />
       </div>
 
