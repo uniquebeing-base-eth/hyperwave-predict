@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { TrendingUp, TrendingDown, Minus, Trophy, X, Zap, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,11 +21,33 @@ const RoundResult = ({
   onClose,
 }: RoundResultProps) => {
   const { shareWin } = useFarcasterShare();
-  const { user, isInMiniApp } = useFarcaster();
+  const { isInMiniApp } = useFarcaster();
   
   // HyperWave: Draw = Loss (no refunds, house keeps funds)
   const isWin = result !== null && result !== "draw" && result === userBet;
   const isLoss = !isWin;
+
+  // For wins, add a 2 second delay before allowing close
+  const [canClose, setCanClose] = useState(false);
+  
+  useEffect(() => {
+    if (isVisible && isWin) {
+      setCanClose(false);
+      const timer = setTimeout(() => {
+        setCanClose(true);
+      }, 2000);
+      return () => clearTimeout(timer);
+    } else if (isVisible) {
+      // For losses, allow immediate close
+      setCanClose(true);
+    }
+  }, [isVisible, isWin]);
+
+  const handleClose = () => {
+    if (canClose || !isWin) {
+      onClose();
+    }
+  };
 
   const handleShare = async () => {
     if (result && result !== "draw") {
@@ -56,10 +79,15 @@ const RoundResult = ({
             exit={{ scale: 0.5, opacity: 0 }}
             transition={{ type: "spring", damping: 15 }}
           >
-            {/* Close Button */}
+            {/* Close Button - disabled during win delay */}
             <button
-              onClick={onClose}
-              className="absolute top-4 right-4 p-2 rounded-full bg-muted hover:bg-muted/80 transition-colors"
+              onClick={handleClose}
+              disabled={isWin && !canClose}
+              className={`absolute top-4 right-4 p-2 rounded-full transition-colors ${
+                isWin && !canClose 
+                  ? 'bg-muted/50 cursor-not-allowed opacity-50' 
+                  : 'bg-muted hover:bg-muted/80'
+              }`}
             >
               <X className="w-4 h-4 text-muted-foreground" />
             </button>

@@ -31,16 +31,21 @@ const getShareImageUrl = (type: string, params: Record<string, string | number>)
 };
 
 export const useFarcasterShare = () => {
-  const shareToFarcaster = async (text: string, embedUrl?: string) => {
+  const shareToFarcaster = async (text: string, imageUrl?: string) => {
     try {
+      // Include both the image and the mini app link as embeds (max 2 embeds)
+      const embeds: [string, string] | [string] = imageUrl 
+        ? [imageUrl, APP_URL] 
+        : [APP_URL];
+      
       await sdk.actions.composeCast({
         text,
-        embeds: embedUrl ? [embedUrl] : [APP_URL],
+        embeds,
       });
     } catch (error) {
       console.log('Share error:', error);
       // Fallback to copying text
-      navigator.clipboard.writeText(`${text}\n\n${embedUrl || APP_URL}`);
+      navigator.clipboard.writeText(`${text}\n\n${APP_URL}`);
       toast.success('Copied to clipboard!');
     }
   };
