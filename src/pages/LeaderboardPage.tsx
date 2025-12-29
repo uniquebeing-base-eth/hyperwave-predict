@@ -1,10 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Trophy, TrendingUp, Medal, Flame, Users, Share2 } from "lucide-react";
-import { formatUnits } from "viem";
-import { ethers } from "ethers";
+import { Trophy, TrendingUp, Medal, Flame, Users, Share2, RefreshCw } from "lucide-react";
 import { useAccount } from "wagmi";
-import { BLOOM_BETTING_ABI, BLOOM_BETTING_ADDRESS, UserStats } from "@/contracts/BloomBetting";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,145 +19,134 @@ interface FarcasterProfile {
   pfpUrl: string | null;
 }
 
+interface ProfileData {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  total_bets: number;
+  total_wins: number;
+  total_losses: number;
+  balance: number;
+  win_rate: number;
+}
+
 interface LeaderboardEntry {
   address: string;
-  stats: UserStats;
+  totalBets: number;
+  totalWins: number;
+  totalLosses: number;
+  winRate: number;
+  balance: number;
   rank: number;
   profile?: FarcasterProfile;
+  dbProfile?: ProfileData;
 }
 
 const LeaderboardPage = () => {
   const { address } = useAccount();
   const { shareLeaderboard } = useFarcasterShare();
-  const { user, isInMiniApp } = useFarcaster();
+  const { isInMiniApp } = useFarcaster();
   
-  const [players, setPlayers] = useState<string[]>([]);
-  const [playerStats, setPlayerStats] = useState<Map<string, UserStats>>(new Map());
-  const [playerProfiles, setPlayerProfiles] = useState<Map<string, FarcasterProfile>>(new Map());
+  const [profiles, setProfiles] = useState<ProfileData[]>([]);
+  const [farcasterProfiles, setFarcasterProfiles] = useState<Map<string, FarcasterProfile>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Fetch all unique players from BetPlaced events
-  useEffect(() => {
-    const fetchPlayers = async () => {
-      try {
-        setLoading(true);
-        
-        const provider = new ethers.JsonRpcProvider("https://mainnet.base.org");
-        const contract = new ethers.Contract(BLOOM_BETTING_ADDRESS, BLOOM_BETTING_ABI, provider);
-        
-        // Get BetPlaced events to find all players
-        const filter = contract.filters.BetPlaced();
-        const logs = await contract.queryFilter(filter, -50000); // Last 50k blocks
-        
-        // Extract unique addresses
-        const uniquePlayers = [...new Set(logs.map(log => {
-          const parsed = contract.interface.parseLog({ topics: log.topics as string[], data: log.data });
-          return parsed?.args?.user as string;
-        }).filter(Boolean))];
-        
-        setPlayers(uniquePlayers);
+  const fetchLeaderboardData = async () => {
+    try {
+      // Fetch profiles from database
+      const { data: profilesData, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('total_wins', { ascending: false })
+        .limit(50);
 
-        // Fetch stats for each player
-        const statsMap = new Map<string, UserStats>();
+      if (error) {
+        console.error("Error fetching profiles:", error);
+        return;
+      }
+
+      if (profilesData && profilesData.length > 0) {
+        setProfiles(profilesData);
+
+        // Fetch Farcaster profiles for addresses
+        const addresses = profilesData.map(p => p.id).filter(Boolean);
         
-        for (const player of uniquePlayers) {
+        if (addresses.length > 0) {
           try {
-            const stats = await contract.getUserStats(player);
-            statsMap.set(player, {
-              totalBets: stats.totalBets,
-              totalWins: stats.totalWins,
-              totalLosses: stats.totalLosses,
-              totalStaked: stats.totalStaked,
-              totalProfits: stats.totalProfits,
-              currentStreak: stats.currentStreak,
-              lastPlayedDay: stats.lastPlayedDay,
-            });
-          } catch (err) {
-            console.error(`Error fetching stats for ${player}:`, err);
-          }
-        }
-        
-        setPlayerStats(statsMap);
-        
-        // Fetch Farcaster profiles for all players
-        if (uniquePlayers.length > 0) {
-          try {
-            const { data, error } = await supabase.functions.invoke('get-farcaster-profiles', {
-              body: { addresses: uniquePlayers }
+            const { data, error: fcError } = await supabase.functions.invoke('get-farcaster-profiles', {
+              body: { addresses }
             });
             
-            if (!error && data?.profiles) {
+            if (!fcError && data?.profiles) {
               const profilesMap = new Map<string, FarcasterProfile>();
               for (const profile of data.profiles) {
                 profilesMap.set(profile.address.toLowerCase(), profile);
               }
-              setPlayerProfiles(profilesMap);
+              setFarcasterProfiles(profilesMap);
             }
           } catch (err) {
             console.error("Error fetching Farcaster profiles:", err);
           }
         }
-      } catch (error) {
-        console.error("Error fetching leaderboard data:", error);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (error) {
+      console.error("Error fetching leaderboard data:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
-    fetchPlayers();
+  useEffect(() => {
+    setLoading(true);
+    fetchLeaderboardData();
   }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchLeaderboardData();
+  };
 
   // Sort by wins
   const winLeaderboard = useMemo((): LeaderboardEntry[] => {
-    return players
-      .map(address => ({
-        address,
-        stats: playerStats.get(address) || {
-          totalBets: 0n,
-          totalWins: 0n,
-          totalLosses: 0n,
-          totalStaked: 0n,
-          totalProfits: 0n,
-          currentStreak: 0n,
-          lastPlayedDay: 0n,
-        },
-        rank: 0,
-        profile: playerProfiles.get(address.toLowerCase()),
-      }))
-      .filter(entry => entry.stats.totalBets > 0n)
-      .sort((a, b) => Number(b.stats.totalWins - a.stats.totalWins))
-      .map((entry, idx) => ({ ...entry, rank: idx + 1 }));
-  }, [players, playerStats, playerProfiles]);
+    return profiles
+      .filter(p => p.total_bets > 0)
+      .sort((a, b) => b.total_wins - a.total_wins)
+      .map((profile, idx) => ({
+        address: profile.id,
+        totalBets: profile.total_bets,
+        totalWins: profile.total_wins,
+        totalLosses: profile.total_losses,
+        winRate: profile.win_rate,
+        balance: profile.balance,
+        rank: idx + 1,
+        profile: farcasterProfiles.get(profile.id.toLowerCase()),
+        dbProfile: profile,
+      }));
+  }, [profiles, farcasterProfiles]);
 
-  // Sort by profit
-  const profitLeaderboard = useMemo((): LeaderboardEntry[] => {
-    return players
-      .map(address => ({
-        address,
-        stats: playerStats.get(address) || {
-          totalBets: 0n,
-          totalWins: 0n,
-          totalLosses: 0n,
-          totalStaked: 0n,
-          totalProfits: 0n,
-          currentStreak: 0n,
-          lastPlayedDay: 0n,
-        },
-        rank: 0,
-        profile: playerProfiles.get(address.toLowerCase()),
-      }))
-      .filter(entry => entry.stats.totalBets > 0n)
-      .sort((a, b) => Number(b.stats.totalProfits - a.stats.totalProfits))
-      .map((entry, idx) => ({ ...entry, rank: idx + 1 }));
-  }, [players, playerStats, playerProfiles]);
+  // Sort by win rate (minimum 5 bets)
+  const winRateLeaderboard = useMemo((): LeaderboardEntry[] => {
+    return profiles
+      .filter(p => p.total_bets >= 5)
+      .sort((a, b) => b.win_rate - a.win_rate)
+      .map((profile, idx) => ({
+        address: profile.id,
+        totalBets: profile.total_bets,
+        totalWins: profile.total_wins,
+        totalLosses: profile.total_losses,
+        winRate: profile.win_rate,
+        balance: profile.balance,
+        rank: idx + 1,
+        profile: farcasterProfiles.get(profile.id.toLowerCase()),
+        dbProfile: profile,
+      }));
+  }, [profiles, farcasterProfiles]);
 
   const formatAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
-  };
-
-  const formatProfit = (profit: bigint) => {
-    const value = Number(formatUnits(profit, 18));
-    return value >= 0 ? `+${value.toFixed(2)}` : value.toFixed(2);
   };
 
   const getRankIcon = (rank: number) => {
@@ -170,14 +156,14 @@ const LeaderboardPage = () => {
     return <span className="w-5 h-5 flex items-center justify-center text-muted-foreground text-sm">{rank}</span>;
   };
 
-  const handleSharePosition = async (entry: LeaderboardEntry, type: 'wins' | 'profit') => {
+  const handleSharePosition = async (entry: LeaderboardEntry, type: 'wins' | 'winrate') => {
     const value = type === 'wins' 
-      ? `${Number(entry.stats.totalWins)}`
-      : formatProfit(entry.stats.totalProfits);
+      ? `${entry.totalWins}`
+      : `${entry.winRate.toFixed(1)}%`;
     
     await shareLeaderboard({
       rank: entry.rank,
-      type,
+      type: type === 'wins' ? 'wins' : 'profit',
       value,
     });
   };
@@ -186,7 +172,7 @@ const LeaderboardPage = () => {
     return address?.toLowerCase() === entryAddress.toLowerCase();
   };
 
-  const LeaderboardList = ({ entries, type }: { entries: LeaderboardEntry[], type: 'wins' | 'profit' }) => {
+  const LeaderboardList = ({ entries, type }: { entries: LeaderboardEntry[], type: 'wins' | 'winrate' }) => {
     if (loading) {
       return (
         <div className="space-y-3">
@@ -224,30 +210,33 @@ const LeaderboardPage = () => {
                     {getRankIcon(entry.rank)}
                   </div>
                   <Avatar className="w-10 h-10 border border-border/50">
-                    {entry.profile?.pfpUrl ? (
-                      <AvatarImage src={entry.profile.pfpUrl} alt={entry.profile.username || 'Player'} />
+                    {(entry.profile?.pfpUrl || entry.dbProfile?.avatar_url) ? (
+                      <AvatarImage 
+                        src={entry.profile?.pfpUrl || entry.dbProfile?.avatar_url || undefined} 
+                        alt={entry.profile?.username || entry.dbProfile?.username || 'Player'} 
+                      />
                     ) : null}
                     <AvatarFallback className="bg-primary/20 text-primary text-xs">
                       {entry.address.slice(2, 4).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    {entry.profile?.username ? (
+                    {(entry.profile?.username || entry.dbProfile?.display_name) ? (
                       <p className="font-medium text-sm">
-                        {entry.profile.displayName || `@${entry.profile.username}`}
+                        {entry.profile?.displayName || entry.dbProfile?.display_name || `@${entry.profile?.username || entry.dbProfile?.username}`}
                       </p>
                     ) : (
                       <p className="font-mono text-sm">{formatAddress(entry.address)}</p>
                     )}
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      {entry.profile?.username && (
-                        <span className="text-primary/70">@{entry.profile.username}</span>
+                      {(entry.profile?.username || entry.dbProfile?.username) && (
+                        <span className="text-primary/70">@{entry.profile?.username || entry.dbProfile?.username}</span>
                       )}
-                      <span>{Number(entry.stats.totalBets)} bets</span>
-                      {entry.stats.currentStreak > 0n && (
+                      <span>{entry.totalBets} bets</span>
+                      {entry.winRate > 60 && (
                         <span className="flex items-center gap-1 text-orange-400">
                           <Flame className="w-3 h-3" />
-                          {Number(entry.stats.currentStreak)}
+                          {entry.winRate.toFixed(0)}%
                         </span>
                       )}
                     </div>
@@ -256,19 +245,16 @@ const LeaderboardPage = () => {
                 <div className="flex items-center gap-3">
                   <div className="text-right">
                     {type === 'wins' ? (
-                      <p className="text-lg font-bold text-primary">{Number(entry.stats.totalWins)}</p>
+                      <p className="text-lg font-bold text-primary">{entry.totalWins}</p>
                     ) : (
-                      <p className={`text-lg font-bold ${
-                        entry.stats.totalProfits >= 0n ? 'text-green-400' : 'text-red-400'
-                      }`}>
-                        {formatProfit(entry.stats.totalProfits)}
+                      <p className="text-lg font-bold text-green-400">
+                        {entry.winRate.toFixed(1)}%
                       </p>
                     )}
                     <p className="text-xs text-muted-foreground">
-                      {type === 'wins' ? 'wins' : 'BLOOM'}
+                      {type === 'wins' ? 'wins' : 'win rate'}
                     </p>
                   </div>
-                  {/* Share button only visible to the user for their own position */}
                   {isInMiniApp && isCurrentUser(entry.address) && (
                     <Button
                       size="sm"
@@ -297,12 +283,23 @@ const LeaderboardPage = () => {
         transition={{ duration: 0.5 }}
       >
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold flex items-center justify-center gap-2">
-            <Trophy className="w-6 h-6 text-primary" />
-            Leaderboard
-          </h1>
+          <div className="flex items-center justify-center gap-2">
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <Trophy className="w-6 h-6 text-primary" />
+              Leaderboard
+            </h1>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 p-0"
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Top {players.length} players on-chain
+            {profiles.length} players registered
           </p>
         </div>
 
@@ -312,9 +309,9 @@ const LeaderboardPage = () => {
               <Trophy className="w-4 h-4" />
               Most Wins
             </TabsTrigger>
-            <TabsTrigger value="profit" className="flex items-center gap-2">
+            <TabsTrigger value="winrate" className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4" />
-              Top Profit
+              Best Win Rate
             </TabsTrigger>
           </TabsList>
           
@@ -322,8 +319,8 @@ const LeaderboardPage = () => {
             <LeaderboardList entries={winLeaderboard} type="wins" />
           </TabsContent>
           
-          <TabsContent value="profit">
-            <LeaderboardList entries={profitLeaderboard} type="profit" />
+          <TabsContent value="winrate">
+            <LeaderboardList entries={winRateLeaderboard} type="winrate" />
           </TabsContent>
         </Tabs>
       </motion.div>

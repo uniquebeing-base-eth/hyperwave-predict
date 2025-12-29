@@ -1,13 +1,19 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Wallet, X, Copy, ExternalLink } from "lucide-react";
+import { Wallet, X, Copy, ExternalLink, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { useFarcaster } from "@/contexts/FarcasterContext";
 import { useNeynarBalances } from "@/hooks/useNeynarBalances";
+import { useConnect, useDisconnect } from "wagmi";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const ProfileDropdown = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const { user, isAuthenticated, isInMiniApp } = useFarcaster();
-  const { ethBalance, bloomBalance, address, isLoading } = useNeynarBalances();
+  const { ethBalance, bloomBalance, address, isLoading, refreshBalances } = useNeynarBalances();
+  const { connectors, connectAsync } = useConnect();
+  const { disconnectAsync } = useDisconnect();
 
   const displayName = user?.displayName || user?.username || "User";
   const pfpUrl = user?.pfpUrl;
@@ -15,11 +21,36 @@ const ProfileDropdown = () => {
   const copyAddress = () => {
     if (address) {
       navigator.clipboard.writeText(address);
+      toast.success("Address copied!");
     }
   };
 
   const shortenAddress = (addr: string) => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  };
+
+  const handleReconnectWallet = async () => {
+    setIsReconnecting(true);
+    try {
+      // Disconnect first
+      await disconnectAsync();
+      
+      // Find the Farcaster connector
+      const farcasterConnector = connectors.find(c => c.id === 'farcaster');
+      
+      if (farcasterConnector) {
+        await connectAsync({ connector: farcasterConnector });
+        await refreshBalances();
+        toast.success("Wallet reconnected to primary address!");
+      } else {
+        toast.error("Farcaster connector not found");
+      }
+    } catch (error) {
+      console.error("Error reconnecting wallet:", error);
+      toast.error("Failed to reconnect wallet");
+    } finally {
+      setIsReconnecting(false);
+    }
   };
 
   if (!isInMiniApp || !isAuthenticated) {
@@ -105,7 +136,7 @@ const ProfileDropdown = () => {
               {address && (
                 <div className="mb-4 p-3 rounded-xl bg-muted/30">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">Wallet</span>
+                    <span className="text-xs text-muted-foreground">Primary Wallet</span>
                     <div className="flex items-center gap-1">
                       <button
                         onClick={copyAddress}
@@ -155,6 +186,18 @@ const ProfileDropdown = () => {
                   </p>
                 </div>
               </div>
+
+              {/* Reconnect Wallet Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full mt-4"
+                onClick={handleReconnectWallet}
+                disabled={isReconnecting}
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${isReconnecting ? 'animate-spin' : ''}`} />
+                {isReconnecting ? "Reconnecting..." : "Reconnect Primary Wallet"}
+              </Button>
             </motion.div>
           </>
         )}
