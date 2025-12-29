@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Trophy, TrendingUp, Medal, Flame, Users, Share2, RefreshCw, Clock, ExternalLink } from "lucide-react";
+import { Trophy, TrendingUp, Medal, Flame, Users, Share2, RefreshCw, Clock } from "lucide-react";
 import { useAccount } from "wagmi";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -43,7 +43,7 @@ const LeaderboardPage = () => {
   const [farcasterProfiles, setFarcasterProfiles] = useState<Map<string, FarcasterProfile>>(new Map());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [timeframe, setTimeframe] = useState<TimeframePeriod>('24h');
+  const [timeframe, setTimeframe] = useState<TimeframePeriod>('30d');
 
   const fetchLeaderboardData = async (period: TimeframePeriod) => {
     try {
@@ -120,10 +120,10 @@ const LeaderboardPage = () => {
       }));
   }, [entries, farcasterProfiles]);
 
-  // Sort by win rate (minimum 5 bets)
+  // Sort by win rate (minimum 3 bets for this leaderboard)
   const winRateLeaderboard = useMemo((): LeaderboardEntry[] => {
     return entries
-      .filter(e => e.total_bets >= 5)
+      .filter(e => e.total_bets >= 3)
       .sort((a, b) => b.win_rate - a.win_rate)
       .map((entry, idx) => ({
         ...entry,
@@ -132,15 +132,11 @@ const LeaderboardPage = () => {
       }));
   }, [entries, farcasterProfiles]);
 
-  const formatAddress = (addr: string) => {
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-  };
-
   const getRankIcon = (rank: number) => {
     if (rank === 1) return <Trophy className="w-5 h-5 text-yellow-400" />;
     if (rank === 2) return <Medal className="w-5 h-5 text-gray-300" />;
     if (rank === 3) return <Medal className="w-5 h-5 text-amber-600" />;
-    return <span className="w-5 h-5 flex items-center justify-center text-muted-foreground text-sm">{rank}</span>;
+    return <span className="w-5 h-5 flex items-center justify-center text-muted-foreground text-sm font-medium">{rank}</span>;
   };
 
   const handleSharePosition = async (entry: LeaderboardEntry, type: 'wins' | 'winrate') => {
@@ -157,6 +153,12 @@ const LeaderboardPage = () => {
 
   const isCurrentUser = (entryAddress: string) => {
     return address?.toLowerCase() === entryAddress.toLowerCase();
+  };
+
+  const getDisplayName = (entry: LeaderboardEntry) => {
+    if (entry.profile?.displayName) return entry.profile.displayName;
+    if (entry.profile?.username) return `@${entry.profile.username}`;
+    return `Player ${entry.rank}`;
   };
 
   const TimeframeSelector = () => (
@@ -181,7 +183,7 @@ const LeaderboardPage = () => {
       return (
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+            <Skeleton key={i} className="h-20 w-full rounded-xl" />
           ))}
         </div>
       );
@@ -207,63 +209,75 @@ const LeaderboardPage = () => {
           >
             <Card className={`p-4 glass border-border/30 ${
               entry.rank <= 3 ? 'border-primary/50 bg-primary/5' : ''
-            } ${isCurrentUser(entry.wallet_address) ? 'ring-2 ring-primary/50' : ''}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 flex justify-center">
+            } ${isCurrentUser(entry.wallet_address) ? 'ring-2 ring-primary/50 bg-primary/10' : ''}`}>
+              <div className="flex items-center justify-between gap-3">
+                {/* Left: Rank + Avatar + Name */}
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="w-8 flex justify-center shrink-0">
                     {getRankIcon(entry.rank)}
                   </div>
-                  <Avatar className="w-12 h-12 border-2 border-primary/30 ring-2 ring-background shadow-lg">
-                    {entry.profile?.pfpUrl ? (
-                      <AvatarImage 
-                        src={entry.profile.pfpUrl} 
-                        alt={entry.profile.username || 'Player'}
-                        className="object-cover"
-                      />
-                    ) : null}
-                    <AvatarFallback className="bg-gradient-to-br from-primary/30 to-primary/10 text-primary font-bold text-sm">
-                      {entry.wallet_address.slice(2, 4).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
+                  
+                  {/* Profile Picture */}
+                  {entry.profile?.username ? (
+                    <a 
+                      href={`https://warpcast.com/${entry.profile.username}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0"
+                    >
+                      <Avatar className="w-12 h-12 border-2 border-primary/30 ring-2 ring-background shadow-lg hover:border-primary transition-colors">
+                        {entry.profile?.pfpUrl ? (
+                          <AvatarImage 
+                            src={entry.profile.pfpUrl} 
+                            alt={entry.profile.username}
+                            className="object-cover"
+                          />
+                        ) : null}
+                        <AvatarFallback className="bg-gradient-to-br from-primary/30 to-primary/10 text-primary font-bold text-sm">
+                          {entry.profile?.username?.slice(0, 2).toUpperCase() || '??'}
+                        </AvatarFallback>
+                      </Avatar>
+                    </a>
+                  ) : (
+                    <Avatar className="w-12 h-12 border-2 border-muted/50 ring-2 ring-background shadow-lg shrink-0">
+                      <AvatarFallback className="bg-gradient-to-br from-muted/50 to-muted/20 text-muted-foreground font-bold text-sm">
+                        P{entry.rank}
+                      </AvatarFallback>
+                    </Avatar>
+                  )}
+                  
+                  {/* Name and Stats */}
                   <div className="flex-1 min-w-0">
                     {entry.profile?.username ? (
                       <a 
                         href={`https://warpcast.com/${entry.profile.username}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-semibold text-sm hover:text-primary transition-colors flex items-center gap-1 group"
+                        className="font-semibold text-sm hover:text-primary transition-colors truncate block"
                       >
-                        {entry.profile.displayName || `@${entry.profile.username}`}
-                        <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        {getDisplayName(entry)}
                       </a>
                     ) : (
-                      <a
-                        href={`https://basescan.org/address/${entry.wallet_address}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-mono text-sm hover:text-primary transition-colors flex items-center gap-1 group"
-                      >
-                        {formatAddress(entry.wallet_address)}
-                        <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </a>
+                      <p className="font-medium text-sm text-muted-foreground truncate">
+                        Player {entry.rank}
+                      </p>
                     )}
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                    
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 flex-wrap">
                       {entry.profile?.username && (
-                        <a 
-                          href={`https://warpcast.com/${entry.profile.username}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary/70 hover:text-primary transition-colors"
-                        >
-                          @{entry.profile.username}
-                        </a>
-                      )}
-                      <span className="text-muted-foreground/60">•</span>
-                      <span>{entry.total_bets} bets</span>
-                      {entry.win_rate > 60 && (
                         <>
-                          <span className="text-muted-foreground/60">•</span>
-                          <span className="flex items-center gap-1 text-orange-400">
+                          <span className="text-primary/70">@{entry.profile.username}</span>
+                          <span className="text-muted-foreground/40">•</span>
+                        </>
+                      )}
+                      <span>{entry.total_bets} bets</span>
+                      <span className="text-muted-foreground/40">•</span>
+                      <span className="text-green-500">{entry.total_wins}W</span>
+                      <span className="text-red-400">{entry.total_losses}L</span>
+                      {entry.win_rate > 50 && (
+                        <>
+                          <span className="text-muted-foreground/40">•</span>
+                          <span className="flex items-center gap-0.5 text-orange-400">
                             <Flame className="w-3 h-3" />
                             {entry.win_rate.toFixed(0)}%
                           </span>
@@ -272,12 +286,14 @@ const LeaderboardPage = () => {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                
+                {/* Right: Score + Share */}
+                <div className="flex items-center gap-2 shrink-0">
                   <div className="text-right">
                     {type === 'wins' ? (
-                      <p className="text-lg font-bold text-primary">{entry.total_wins}</p>
+                      <p className="text-xl font-bold text-primary">{entry.total_wins}</p>
                     ) : (
-                      <p className="text-lg font-bold text-green-400">
+                      <p className="text-xl font-bold text-green-400">
                         {entry.win_rate.toFixed(1)}%
                       </p>
                     )}
@@ -285,11 +301,13 @@ const LeaderboardPage = () => {
                       {type === 'wins' ? 'wins' : 'win rate'}
                     </p>
                   </div>
+                  
+                  {/* Share button - ONLY for current user */}
                   {isInMiniApp && isCurrentUser(entry.wallet_address) && (
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-8 w-8 p-0"
+                      className="h-8 w-8 p-0 text-primary"
                       onClick={() => handleSharePosition(entry, type)}
                     >
                       <Share2 className="w-4 h-4" />
@@ -329,7 +347,7 @@ const LeaderboardPage = () => {
             </Button>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            {entries.length} players in {timeframe}
+            {entries.length} player{entries.length !== 1 ? 's' : ''} in {timeframe}
           </p>
         </div>
 
