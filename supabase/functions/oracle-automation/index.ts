@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { ethers } from "https://esm.sh/ethers@6.9.0";
 
 const corsHeaders = {
@@ -16,6 +17,7 @@ const BETTING_ABI = [
   "function isBettingOpen() view returns (bool)",
   "function getTimeRemaining() view returns (uint256)",
   "function getCurrentRound() view returns (tuple(uint256 roundId, uint256 startTime, uint256 endTime, uint256 startPrice, uint256 endPrice, uint256 totalUpPool, uint256 totalDownPool, uint8 result, bool resolved))",
+  "function getRoundBets(uint256 _roundId) view returns (tuple(uint256 betId, uint256 roundId, address user, uint8 direction, uint256 amount, uint256 timestamp, uint8 result, uint256 payout)[])",
   "function startRound(uint256 _startPrice)",
   "function settleRound(uint256 _roundId, uint256 _endPrice)",
 ];
@@ -57,6 +59,69 @@ async function fetchSpotEthUsd8(): Promise<bigint | null> {
   }
 }
 
+// Direction enum matching the contract
+enum Direction {
+  None = 0,
+  Up = 1,
+  Down = 2
+}
+
+// BetResult enum matching the contract
+enum BetResult {
+  Pending = 0,
+  Win = 1,
+  Lose = 2
+}
+
+async function syncRoundBetsToDatabase(
+  supabase: any,
+  bettingContract: ethers.Contract,
+  roundId: bigint,
+  startPrice: bigint,
+  endPrice: bigint,
+  settledAt: Date
+) {
+  try {
+    console.log(`Syncing bets for round ${roundId} to database...`);
+    
+    const bets = await bettingContract.getRoundBets(roundId);
+    console.log(`Found ${bets.length} bets in round ${roundId}`);
+    
+    if (bets.length === 0) return;
+
+    const records = bets.map((bet: any) => {
+      const result = bet.result === BetResult.Win ? 'win' : 'loss';
+      const direction = bet.direction === Direction.Up ? 'up' : 'down';
+      
+      return {
+        chain_bet_id: Number(bet.betId),
+        round_id: Number(bet.roundId),
+        wallet_address: bet.user.toLowerCase(),
+        direction,
+        amount: Number(ethers.formatUnits(bet.amount, 18)),
+        result,
+        payout: Number(ethers.formatUnits(bet.payout, 18)),
+        placed_at: new Date(Number(bet.timestamp) * 1000).toISOString(),
+        settled_at: settledAt.toISOString(),
+        start_price: Number(startPrice) / 1e8,
+        end_price: Number(endPrice) / 1e8,
+      };
+    });
+
+    // Upsert to avoid duplicates (using chain_bet_id unique constraint)
+    const { error } = await supabase
+      .from('leaderboard_bets')
+      .upsert(records, { onConflict: 'chain_bet_id' });
+
+    if (error) {
+      console.error('Error upserting bets to database:', error);
+    } else {
+      console.log(`Successfully synced ${records.length} bets to leaderboard_bets`);
+    }
+  } catch (err) {
+    console.error('Error syncing round bets:', err);
+  }
+}
 
 serve(async (req) => {
   // Handle CORS
@@ -74,6 +139,18 @@ serve(async (req) => {
     const formattedKey = privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`;
     
     console.log("=== Oracle Automation Started ===");
+    
+    // Initialize Supabase client for database sync
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.warn("Supabase credentials not configured, skipping database sync");
+    }
+    
+    const supabase = supabaseUrl && supabaseServiceKey 
+      ? createClient(supabaseUrl, supabaseServiceKey)
+      : null;
     
     // Connect to Base mainnet
     const provider = new ethers.JsonRpcProvider("https://mainnet.base.org");
@@ -160,6 +237,18 @@ serve(async (req) => {
 
       txHash = settleTx.hash;
       action = "settleRound";
+      
+      // Sync the settled round's bets to the database
+      if (supabase) {
+        await syncRoundBetsToDatabase(
+          supabase,
+          bettingContract,
+          currentRoundId,
+          startPrice,
+          settlePrice,
+          new Date()
+        );
+      }
 
       // Start next round right away using the settle price as start price
       console.log("Starting next round immediately with price:", settlePrice.toString());
