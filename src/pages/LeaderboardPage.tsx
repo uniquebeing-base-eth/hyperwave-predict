@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Trophy, TrendingUp, Medal, Flame, Users, Share2, RefreshCw, Clock } from "lucide-react";
+import { Trophy, TrendingUp, Medal, Flame, Users, Share2, RefreshCw, Clock, ExternalLink } from "lucide-react";
 import { useAccount } from "wagmi";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -213,35 +213,61 @@ const LeaderboardPage = () => {
                   <div className="w-8 flex justify-center">
                     {getRankIcon(entry.rank)}
                   </div>
-                  <Avatar className="w-10 h-10 border border-border/50">
+                  <Avatar className="w-12 h-12 border-2 border-primary/30 ring-2 ring-background shadow-lg">
                     {entry.profile?.pfpUrl ? (
                       <AvatarImage 
                         src={entry.profile.pfpUrl} 
-                        alt={entry.profile.username || 'Player'} 
+                        alt={entry.profile.username || 'Player'}
+                        className="object-cover"
                       />
                     ) : null}
-                    <AvatarFallback className="bg-primary/20 text-primary text-xs">
+                    <AvatarFallback className="bg-gradient-to-br from-primary/30 to-primary/10 text-primary font-bold text-sm">
                       {entry.wallet_address.slice(2, 4).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <div>
+                  <div className="flex-1 min-w-0">
                     {entry.profile?.username ? (
-                      <p className="font-medium text-sm">
+                      <a 
+                        href={`https://warpcast.com/${entry.profile.username}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-semibold text-sm hover:text-primary transition-colors flex items-center gap-1 group"
+                      >
                         {entry.profile.displayName || `@${entry.profile.username}`}
-                      </p>
+                        <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </a>
                     ) : (
-                      <p className="font-mono text-sm">{formatAddress(entry.wallet_address)}</p>
+                      <a
+                        href={`https://basescan.org/address/${entry.wallet_address}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-sm hover:text-primary transition-colors flex items-center gap-1 group"
+                      >
+                        {formatAddress(entry.wallet_address)}
+                        <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </a>
                     )}
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                       {entry.profile?.username && (
-                        <span className="text-primary/70">@{entry.profile.username}</span>
+                        <a 
+                          href={`https://warpcast.com/${entry.profile.username}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary/70 hover:text-primary transition-colors"
+                        >
+                          @{entry.profile.username}
+                        </a>
                       )}
+                      <span className="text-muted-foreground/60">•</span>
                       <span>{entry.total_bets} bets</span>
                       {entry.win_rate > 60 && (
-                        <span className="flex items-center gap-1 text-orange-400">
-                          <Flame className="w-3 h-3" />
-                          {entry.win_rate.toFixed(0)}%
-                        </span>
+                        <>
+                          <span className="text-muted-foreground/60">•</span>
+                          <span className="flex items-center gap-1 text-orange-400">
+                            <Flame className="w-3 h-3" />
+                            {entry.win_rate.toFixed(0)}%
+                          </span>
+                        </>
                       )}
                     </div>
                   </div>
