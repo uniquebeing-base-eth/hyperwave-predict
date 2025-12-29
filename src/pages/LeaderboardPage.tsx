@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Trophy, TrendingUp, Medal, Flame, Users, Share2, RefreshCw } from "lucide-react";
+import { Trophy, TrendingUp, Medal, Flame, Users, Share2, RefreshCw, Clock } from "lucide-react";
 import { useAccount } from "wagmi";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -19,69 +19,64 @@ interface FarcasterProfile {
   pfpUrl: string | null;
 }
 
-interface ProfileData {
-  id: string;
-  username: string | null;
-  display_name: string | null;
-  avatar_url: string | null;
+interface LeaderboardEntry {
+  wallet_address: string;
   total_bets: number;
   total_wins: number;
   total_losses: number;
-  balance: number;
   win_rate: number;
-}
-
-interface LeaderboardEntry {
-  address: string;
-  totalBets: number;
-  totalWins: number;
-  totalLosses: number;
-  winRate: number;
-  balance: number;
+  staked: number;
+  payout: number;
+  profit: number;
   rank: number;
   profile?: FarcasterProfile;
-  dbProfile?: ProfileData;
 }
+
+type TimeframePeriod = '24h' | '7d' | '30d';
 
 const LeaderboardPage = () => {
   const { address } = useAccount();
   const { shareLeaderboard } = useFarcasterShare();
   const { isInMiniApp } = useFarcaster();
   
-  const [profiles, setProfiles] = useState<ProfileData[]>([]);
+  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [farcasterProfiles, setFarcasterProfiles] = useState<Map<string, FarcasterProfile>>(new Map());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [timeframe, setTimeframe] = useState<TimeframePeriod>('24h');
 
-  const fetchLeaderboardData = async () => {
+  const fetchLeaderboardData = async (period: TimeframePeriod) => {
     try {
-      // Fetch profiles from database
-      const { data: profilesData, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('total_wins', { ascending: false })
-        .limit(50);
+      setLoading(true);
+      
+      // Call the RPC function
+      const { data, error } = await supabase.rpc('get_leaderboard', { period });
 
       if (error) {
-        console.error("Error fetching profiles:", error);
+        console.error("Error fetching leaderboard:", error);
         return;
       }
 
-      if (profilesData && profilesData.length > 0) {
-        setProfiles(profilesData);
+      if (data && data.length > 0) {
+        const rankedEntries: LeaderboardEntry[] = data.map((entry: any, idx: number) => ({
+          ...entry,
+          rank: idx + 1,
+        }));
+        
+        setEntries(rankedEntries);
 
         // Fetch Farcaster profiles for addresses
-        const addresses = profilesData.map(p => p.id).filter(Boolean);
+        const addresses = rankedEntries.map(e => e.wallet_address).filter(Boolean);
         
         if (addresses.length > 0) {
           try {
-            const { data, error: fcError } = await supabase.functions.invoke('get-farcaster-profiles', {
+            const { data: fcData, error: fcError } = await supabase.functions.invoke('get-farcaster-profiles', {
               body: { addresses }
             });
             
-            if (!fcError && data?.profiles) {
+            if (!fcError && fcData?.profiles) {
               const profilesMap = new Map<string, FarcasterProfile>();
-              for (const profile of data.profiles) {
+              for (const profile of fcData.profiles) {
                 profilesMap.set(profile.address.toLowerCase(), profile);
               }
               setFarcasterProfiles(profilesMap);
@@ -90,6 +85,8 @@ const LeaderboardPage = () => {
             console.error("Error fetching Farcaster profiles:", err);
           }
         }
+      } else {
+        setEntries([]);
       }
     } catch (error) {
       console.error("Error fetching leaderboard data:", error);
@@ -100,53 +97,43 @@ const LeaderboardPage = () => {
   };
 
   useEffect(() => {
-    setLoading(true);
-    fetchLeaderboardData();
-  }, []);
+    fetchLeaderboardData(timeframe);
+  }, [timeframe]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchLeaderboardData();
+    await fetchLeaderboardData(timeframe);
+  };
+
+  const handleTimeframeChange = (period: TimeframePeriod) => {
+    setTimeframe(period);
   };
 
   // Sort by wins
   const winLeaderboard = useMemo((): LeaderboardEntry[] => {
-    return profiles
-      .filter(p => p.total_bets > 0)
+    return entries
       .sort((a, b) => b.total_wins - a.total_wins)
-      .map((profile, idx) => ({
-        address: profile.id,
-        totalBets: profile.total_bets,
-        totalWins: profile.total_wins,
-        totalLosses: profile.total_losses,
-        winRate: profile.win_rate,
-        balance: profile.balance,
+      .map((entry, idx) => ({
+        ...entry,
         rank: idx + 1,
-        profile: farcasterProfiles.get(profile.id.toLowerCase()),
-        dbProfile: profile,
+        profile: farcasterProfiles.get(entry.wallet_address.toLowerCase()),
       }));
-  }, [profiles, farcasterProfiles]);
+  }, [entries, farcasterProfiles]);
 
   // Sort by win rate (minimum 5 bets)
   const winRateLeaderboard = useMemo((): LeaderboardEntry[] => {
-    return profiles
-      .filter(p => p.total_bets >= 5)
+    return entries
+      .filter(e => e.total_bets >= 5)
       .sort((a, b) => b.win_rate - a.win_rate)
-      .map((profile, idx) => ({
-        address: profile.id,
-        totalBets: profile.total_bets,
-        totalWins: profile.total_wins,
-        totalLosses: profile.total_losses,
-        winRate: profile.win_rate,
-        balance: profile.balance,
+      .map((entry, idx) => ({
+        ...entry,
         rank: idx + 1,
-        profile: farcasterProfiles.get(profile.id.toLowerCase()),
-        dbProfile: profile,
+        profile: farcasterProfiles.get(entry.wallet_address.toLowerCase()),
       }));
-  }, [profiles, farcasterProfiles]);
+  }, [entries, farcasterProfiles]);
 
-  const formatAddress = (address: string) => {
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  const formatAddress = (addr: string) => {
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
   const getRankIcon = (rank: number) => {
@@ -158,8 +145,8 @@ const LeaderboardPage = () => {
 
   const handleSharePosition = async (entry: LeaderboardEntry, type: 'wins' | 'winrate') => {
     const value = type === 'wins' 
-      ? `${entry.totalWins}`
-      : `${entry.winRate.toFixed(1)}%`;
+      ? `${entry.total_wins}`
+      : `${entry.win_rate.toFixed(1)}%`;
     
     await shareLeaderboard({
       rank: entry.rank,
@@ -172,7 +159,24 @@ const LeaderboardPage = () => {
     return address?.toLowerCase() === entryAddress.toLowerCase();
   };
 
-  const LeaderboardList = ({ entries, type }: { entries: LeaderboardEntry[], type: 'wins' | 'winrate' }) => {
+  const TimeframeSelector = () => (
+    <div className="flex items-center justify-center gap-2 mb-4">
+      {(['24h', '7d', '30d'] as TimeframePeriod[]).map((period) => (
+        <Button
+          key={period}
+          size="sm"
+          variant={timeframe === period ? "default" : "outline"}
+          onClick={() => handleTimeframeChange(period)}
+          className="flex items-center gap-1"
+        >
+          <Clock className="w-3 h-3" />
+          {period}
+        </Button>
+      ))}
+    </div>
+  );
+
+  const LeaderboardList = ({ entries: listEntries, type }: { entries: LeaderboardEntry[], type: 'wins' | 'winrate' }) => {
     if (loading) {
       return (
         <div className="space-y-3">
@@ -183,60 +187,60 @@ const LeaderboardPage = () => {
       );
     }
 
-    if (entries.length === 0) {
+    if (listEntries.length === 0) {
       return (
         <div className="text-center py-12 text-muted-foreground">
           <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
-          <p>No players yet. Be the first!</p>
+          <p>No players yet for this period. Be the first!</p>
         </div>
       );
     }
 
     return (
       <div className="space-y-2">
-        {entries.slice(0, 20).map((entry, idx) => (
+        {listEntries.slice(0, 20).map((entry, idx) => (
           <motion.div
-            key={entry.address}
+            key={entry.wallet_address}
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: idx * 0.05 }}
           >
             <Card className={`p-4 glass border-border/30 ${
               entry.rank <= 3 ? 'border-primary/50 bg-primary/5' : ''
-            } ${isCurrentUser(entry.address) ? 'ring-2 ring-primary/50' : ''}`}>
+            } ${isCurrentUser(entry.wallet_address) ? 'ring-2 ring-primary/50' : ''}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-8 flex justify-center">
                     {getRankIcon(entry.rank)}
                   </div>
                   <Avatar className="w-10 h-10 border border-border/50">
-                    {(entry.profile?.pfpUrl || entry.dbProfile?.avatar_url) ? (
+                    {entry.profile?.pfpUrl ? (
                       <AvatarImage 
-                        src={entry.profile?.pfpUrl || entry.dbProfile?.avatar_url || undefined} 
-                        alt={entry.profile?.username || entry.dbProfile?.username || 'Player'} 
+                        src={entry.profile.pfpUrl} 
+                        alt={entry.profile.username || 'Player'} 
                       />
                     ) : null}
                     <AvatarFallback className="bg-primary/20 text-primary text-xs">
-                      {entry.address.slice(2, 4).toUpperCase()}
+                      {entry.wallet_address.slice(2, 4).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    {(entry.profile?.username || entry.dbProfile?.display_name) ? (
+                    {entry.profile?.username ? (
                       <p className="font-medium text-sm">
-                        {entry.profile?.displayName || entry.dbProfile?.display_name || `@${entry.profile?.username || entry.dbProfile?.username}`}
+                        {entry.profile.displayName || `@${entry.profile.username}`}
                       </p>
                     ) : (
-                      <p className="font-mono text-sm">{formatAddress(entry.address)}</p>
+                      <p className="font-mono text-sm">{formatAddress(entry.wallet_address)}</p>
                     )}
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      {(entry.profile?.username || entry.dbProfile?.username) && (
-                        <span className="text-primary/70">@{entry.profile?.username || entry.dbProfile?.username}</span>
+                      {entry.profile?.username && (
+                        <span className="text-primary/70">@{entry.profile.username}</span>
                       )}
-                      <span>{entry.totalBets} bets</span>
-                      {entry.winRate > 60 && (
+                      <span>{entry.total_bets} bets</span>
+                      {entry.win_rate > 60 && (
                         <span className="flex items-center gap-1 text-orange-400">
                           <Flame className="w-3 h-3" />
-                          {entry.winRate.toFixed(0)}%
+                          {entry.win_rate.toFixed(0)}%
                         </span>
                       )}
                     </div>
@@ -245,17 +249,17 @@ const LeaderboardPage = () => {
                 <div className="flex items-center gap-3">
                   <div className="text-right">
                     {type === 'wins' ? (
-                      <p className="text-lg font-bold text-primary">{entry.totalWins}</p>
+                      <p className="text-lg font-bold text-primary">{entry.total_wins}</p>
                     ) : (
                       <p className="text-lg font-bold text-green-400">
-                        {entry.winRate.toFixed(1)}%
+                        {entry.win_rate.toFixed(1)}%
                       </p>
                     )}
                     <p className="text-xs text-muted-foreground">
                       {type === 'wins' ? 'wins' : 'win rate'}
                     </p>
                   </div>
-                  {isInMiniApp && isCurrentUser(entry.address) && (
+                  {isInMiniApp && isCurrentUser(entry.wallet_address) && (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -282,7 +286,7 @@ const LeaderboardPage = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <div className="text-center mb-6">
+        <div className="text-center mb-4">
           <div className="flex items-center justify-center gap-2">
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Trophy className="w-6 h-6 text-primary" />
@@ -299,9 +303,11 @@ const LeaderboardPage = () => {
             </Button>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            {profiles.length} players registered
+            {entries.length} players in {timeframe}
           </p>
         </div>
+
+        <TimeframeSelector />
 
         <Tabs defaultValue="wins" className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-4">
