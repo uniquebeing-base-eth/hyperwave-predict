@@ -103,6 +103,54 @@ export type Database = {
         }
         Relationships: []
       }
+      leaderboard_bets: {
+        Row: {
+          amount: number
+          chain_bet_id: number
+          created_at: string
+          direction: string
+          end_price: number | null
+          id: string
+          payout: number
+          placed_at: string
+          result: string
+          round_id: number
+          settled_at: string | null
+          start_price: number | null
+          wallet_address: string
+        }
+        Insert: {
+          amount: number
+          chain_bet_id: number
+          created_at?: string
+          direction: string
+          end_price?: number | null
+          id?: string
+          payout?: number
+          placed_at: string
+          result: string
+          round_id: number
+          settled_at?: string | null
+          start_price?: number | null
+          wallet_address: string
+        }
+        Update: {
+          amount?: number
+          chain_bet_id?: number
+          created_at?: string
+          direction?: string
+          end_price?: number | null
+          id?: string
+          payout?: number
+          placed_at?: string
+          result?: string
+          round_id?: number
+          settled_at?: string | null
+          start_price?: number | null
+          wallet_address?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -150,7 +198,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_leaderboard: {
+        Args: { period: string }
+        Returns: {
+          payout: number
+          profit: number
+          staked: number
+          total_bets: number
+          total_losses: number
+          total_wins: number
+          wallet_address: string
+          win_rate: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
