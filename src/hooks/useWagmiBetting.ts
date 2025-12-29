@@ -11,6 +11,8 @@ import {
   type UserStats,
 } from '@/lib/wagmiConfig';
 import { toast } from '@/hooks/use-toast';
+import { useFarcaster } from '@/contexts/FarcasterContext';
+import { supabase } from '@/integrations/supabase/client';
 
 interface UseWagmiBettingReturn {
   // State
@@ -42,6 +44,7 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
   const { data: sendCallsData, isPending: isSendingCalls, sendCalls, reset: resetSendCalls } = useSendCalls();
+  const { user, isInMiniApp } = useFarcaster();
 
   const { data: callsStatus, isLoading: isConfirming, refetch: refetchCallsStatus } = useWaitForCallsStatus({
     id: sendCallsData?.id,
@@ -50,6 +53,8 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
 
   const [isApproving, setIsApproving] = useState(false);
   const [isBetting, setIsBetting] = useState(false);
+  const [primaryWalletAddress, setPrimaryWalletAddress] = useState<string | null>(null);
+  const [walletValidated, setWalletValidated] = useState(false);
 
   // Read token decimals
   const { data: decimalsData } = useReadContract({
@@ -167,6 +172,61 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
   }, [connect, connectors]);
 
 
+  // Validate wallet matches primary Farcaster wallet
+  const validateWallet = useCallback(async (): Promise<boolean> => {
+    if (!isInMiniApp || !user?.fid) {
+      // Not in mini app, skip validation
+      return true;
+    }
+
+    if (!address) {
+      return false;
+    }
+
+    try {
+      const { data, error } = await supabase.functions.invoke('get-wallet-balances', {
+        body: { fid: user.fid },
+      });
+
+      if (error) {
+        console.error('Wallet validation error:', error);
+        return true; // Allow on error to not block users
+      }
+
+      const farcasterPrimaryAddress = data?.address?.toLowerCase();
+      const currentConnectedAddress = address.toLowerCase();
+
+      setPrimaryWalletAddress(farcasterPrimaryAddress || null);
+
+      if (!farcasterPrimaryAddress) {
+        return true; // No verified wallet, allow
+      }
+
+      const isMatch = farcasterPrimaryAddress === currentConnectedAddress;
+      setWalletValidated(isMatch);
+
+      if (!isMatch) {
+        toast({
+          title: 'Wrong wallet connected',
+          description: `Please connect your primary Farcaster wallet (${farcasterPrimaryAddress.slice(0, 6)}...${farcasterPrimaryAddress.slice(-4)})`,
+          variant: 'destructive',
+        });
+      }
+
+      return isMatch;
+    } catch (err) {
+      console.error('Wallet validation failed:', err);
+      return true; // Allow on error
+    }
+  }, [address, user?.fid, isInMiniApp]);
+
+  // Validate wallet when address or user changes
+  useEffect(() => {
+    if (address && isInMiniApp && user?.fid) {
+      validateWallet();
+    }
+  }, [address, isInMiniApp, user?.fid, validateWallet]);
+
   // Refresh all data
   const refreshData = useCallback(() => {
     refetchBalance();
@@ -225,6 +285,14 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
         variant: 'destructive',
       });
       return false;
+    }
+
+    // Validate wallet matches primary Farcaster wallet before betting
+    if (isInMiniApp && user?.fid) {
+      const isValidWallet = await validateWallet();
+      if (!isValidWallet) {
+        return false;
+      }
     }
 
     try {
@@ -367,6 +435,9 @@ export function useWagmiBetting(): UseWagmiBettingReturn {
     minStakeData,
     refreshData,
     resetSendCalls,
+    isInMiniApp,
+    user?.fid,
+    validateWallet,
   ]);
 
 
