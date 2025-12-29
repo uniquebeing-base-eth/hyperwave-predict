@@ -99,27 +99,41 @@ async function getTokenBalance(
   return "0";
 }
 
-async function getUserVerifiedAddress(fid: number): Promise<string | null> {
+function pickPrimaryEthAddress(user: any): string | null {
+  // Neynar returns both `verifications` and `verified_addresses`. In practice,
+  // Farcaster clients treat the first verification as the user's primary wallet.
+  const verifications = Array.isArray(user?.verifications) ? user.verifications : null;
+  if (verifications && verifications.length > 0 && typeof verifications[0] === "string") {
+    return verifications[0];
+  }
+
+  const verified = user?.verified_addresses?.eth_addresses;
+  if (Array.isArray(verified) && verified.length > 0 && typeof verified[0] === "string") {
+    return verified[0];
+  }
+
+  if (typeof user?.custody_address === "string" && user.custody_address) {
+    return user.custody_address;
+  }
+
+  return null;
+}
+
+async function getUserPrimaryAddress(fid: number): Promise<string | null> {
   const response = await fetch(`https://api.neynar.com/v2/farcaster/user/bulk?fids=${fid}`, {
     headers: {
       "api_key": NEYNAR_API_KEY || "",
       "Content-Type": "application/json",
     },
   });
-  
+
   const data = await response.json();
-  
+
   if (data.users && data.users.length > 0) {
     const user = data.users[0];
-    // Try verified addresses first, then custody address
-    if (user.verified_addresses?.eth_addresses?.length > 0) {
-      return user.verified_addresses.eth_addresses[0];
-    }
-    if (user.custody_address) {
-      return user.custody_address;
-    }
+    return pickPrimaryEthAddress(user);
   }
-  
+
   return null;
 }
 
@@ -140,7 +154,7 @@ serve(async (req) => {
     }
     
     // Get user's verified Ethereum address from Neynar
-    const walletAddress = await getUserVerifiedAddress(fid);
+    const walletAddress = await getUserPrimaryAddress(fid);
     
     if (!walletAddress) {
       return new Response(
