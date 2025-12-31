@@ -1,3 +1,4 @@
+
 import MiniAppSDK, { sdk } from '@farcaster/miniapp-sdk';
 import {
   ChainNotConfiguredError,
