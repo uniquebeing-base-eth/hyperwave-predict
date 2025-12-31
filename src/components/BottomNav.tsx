@@ -1,3 +1,4 @@
+
 import { Gift, Zap, BarChart3, Trophy } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { motion } from "framer-motion";
