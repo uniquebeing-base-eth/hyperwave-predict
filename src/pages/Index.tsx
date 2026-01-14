@@ -346,6 +346,8 @@ const Index = () => {
         amount={currentBet?.amount || 0}
         isVisible={showResult}
         onClose={() => setShowResult(false)}
+        streak={streak}
+        vaultAmount={rewards}
       />
     </>
   );
