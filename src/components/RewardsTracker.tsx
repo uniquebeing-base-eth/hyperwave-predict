@@ -1,6 +1,5 @@
-
 import { motion } from "framer-motion";
-import { Gift, Clock, Sparkles } from "lucide-react";
+import { Vault, Clock, Sparkles, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface RewardsTrackerProps {
@@ -18,6 +17,8 @@ const RewardsTracker = ({
 }: RewardsTrackerProps) => {
   const daysRequired = 7;
   const progressPercentage = Math.min((daysPlayed / daysRequired) * 100, 100);
+  const multiplier = canClaim ? 2 : 1;
+  const daysToUnlock = daysRequired - daysPlayed;
 
   return (
     <motion.div
@@ -26,7 +27,7 @@ const RewardsTracker = ({
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.2 }}
     >
-      {/* Glow effect when claimable */}
+      {/* Glow effect when multiplier unlocked */}
       {canClaim && (
         <motion.div
           className="absolute inset-0 bg-gradient-to-r from-accent/20 via-primary/20 to-accent/20"
@@ -39,24 +40,28 @@ const RewardsTracker = ({
       <div className="relative flex items-center justify-between mb-5">
         <div className="flex items-center gap-2">
           <div className="p-2 rounded-xl bg-accent/20">
-            <Gift className="w-5 h-5 text-accent" />
+            <Vault className="w-5 h-5 text-accent" />
           </div>
           <div>
-            <h3 className="font-display font-bold text-foreground">Total Rewards</h3>
-            <p className="text-xs text-muted-foreground">Play daily to claim</p>
+            <h3 className="font-display font-bold text-foreground">Phase Vault</h3>
+            <p className="text-xs text-muted-foreground">Your phase earnings</p>
           </div>
         </div>
-        {canClaim && (
-          <motion.div
-            animate={{ rotate: [0, 15, -15, 0] }}
-            transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 2 }}
-          >
-            <Sparkles className="w-5 h-5 text-accent" />
-          </motion.div>
-        )}
+        {/* Multiplier Badge */}
+        <motion.div
+          className={`px-3 py-1.5 rounded-full font-display font-bold text-sm ${
+            canClaim 
+              ? 'bg-gradient-accent text-white shadow-[0_0_15px_hsl(var(--accent)/0.5)]' 
+              : 'bg-muted text-muted-foreground'
+          }`}
+          animate={canClaim ? { scale: [1, 1.05, 1] } : {}}
+          transition={{ duration: 1.5, repeat: Infinity }}
+        >
+          {multiplier}x
+        </motion.div>
       </div>
 
-      {/* Rewards Amount */}
+      {/* Vault Amount */}
       <div className="relative text-center mb-5 py-4 rounded-xl bg-muted/30">
         <motion.p
           className="text-4xl font-display font-bold text-primary text-glow-primary"
@@ -66,9 +71,21 @@ const RewardsTracker = ({
           {totalRewards.toLocaleString()}
         </motion.p>
         <p className="text-sm text-muted-foreground mt-1">$BLOOM</p>
+        
+        {/* Multiplier unlocked message */}
+        {canClaim && (
+          <motion.div 
+            className="mt-2 flex items-center justify-center gap-1 text-accent"
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <Sparkles className="w-4 h-4" />
+            <span className="text-sm font-medium">Multiplier unlocked: 2x</span>
+          </motion.div>
+        )}
       </div>
 
-      {/* Progress */}
+      {/* Streak Progress */}
       <div className="relative mb-5">
         <div className="flex justify-between text-xs text-muted-foreground mb-2">
           <div className="flex items-center gap-1">
@@ -91,19 +108,42 @@ const RewardsTracker = ({
           />
         </div>
 
-        {/* Day markers - no numbers, just dots */}
-        <div className="flex justify-between mt-2">
+        {/* Day markers with visual streak */}
+        <div className="flex justify-between mt-3">
           {Array.from({ length: daysRequired }).map((_, i) => (
-            <div
-              key={i}
-              className={`w-5 h-5 rounded-full flex items-center justify-center
-                ${i < daysPlayed 
-                  ? 'bg-primary border border-primary/60 shadow-[0_0_8px_hsl(var(--primary)/0.5)]' 
-                  : 'bg-muted/30 border border-muted'
-                }`}
-            />
+            <div key={i} className="flex flex-col items-center">
+              <motion.div
+                className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold
+                  ${i < daysPlayed 
+                    ? 'bg-primary text-white border border-primary/60 shadow-[0_0_10px_hsl(var(--primary)/0.5)]' 
+                    : i === daysPlayed 
+                      ? 'bg-muted/50 border-2 border-primary/50 text-primary'
+                      : 'bg-muted/30 border border-muted text-muted-foreground'
+                  }`}
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.1 * i }}
+              >
+                {i + 1}
+              </motion.div>
+              {i === 6 && (
+                <span className="text-[10px] text-accent mt-1">2x</span>
+              )}
+            </div>
           ))}
         </div>
+
+        {/* Days to unlock message */}
+        {!canClaim && daysToUnlock > 0 && (
+          <motion.p 
+            className="text-center text-xs text-primary mt-3"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            <Zap className="w-3 h-3 inline mr-1" />
+            {daysToUnlock} day{daysToUnlock > 1 ? 's' : ''} left to unlock 2x rewards
+          </motion.p>
+        )}
       </div>
 
       {/* Claim Button */}
@@ -122,15 +162,15 @@ const RewardsTracker = ({
           />
         )}
         <span className="relative z-10">
-          {canClaim ? "Claim Rewards" : `Play ${daysRequired - daysPlayed} more days`}
+          {canClaim ? "Claim Rewards" : "Withdraw Anytime"}
         </span>
       </Button>
 
       {/* Info text */}
       <p className="text-center text-xs text-muted-foreground mt-3">
         {canClaim 
-          ? "Your rewards are ready! Claim now." 
-          : "Keep playing daily to unlock your rewards."
+          ? "Congrats! Your 2x multiplier is active." 
+          : "Maintain a 7-day streak to double your Phase Vault"
         }
       </p>
     </motion.div>

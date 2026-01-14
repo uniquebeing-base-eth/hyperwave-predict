@@ -1,6 +1,5 @@
-
 import { motion } from "framer-motion";
-import { Wallet, Trophy, Target, Flame, Coins, Share2 } from "lucide-react";
+import { Wallet, Trophy, Target, Flame, Coins, Share2, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useFarcasterShare } from "@/hooks/useFarcasterShare";
 import { useFarcaster } from "@/contexts/FarcasterContext";
@@ -11,18 +10,31 @@ interface UserStatsProps {
   totalBets: number;
   wins: number;
   streak: number;
+  percentile?: number;
+  vaultAmount?: number;
 }
 
-const UserStats = ({ ethBalance, bloomBalance, totalBets, wins, streak }: UserStatsProps) => {
+const UserStats = ({ 
+  ethBalance, 
+  bloomBalance, 
+  totalBets, 
+  wins, 
+  streak,
+  percentile = 0,
+  vaultAmount = 0,
+}: UserStatsProps) => {
   const { shareStats } = useFarcasterShare();
   const { user, isInMiniApp } = useFarcaster();
   const winRate = totalBets > 0 ? Math.round((wins / totalBets) * 100) : 0;
+  const multiplier = streak >= 7 ? 2 : 1;
 
   const handleShare = async () => {
     await shareStats({
       totalPlays: totalBets,
       winRate,
       streak,
+      vaultAmount,
+      multiplier,
     });
   };
 
@@ -63,7 +75,7 @@ const UserStats = ({ ethBalance, bloomBalance, totalBets, wins, streak }: UserSt
       icon: Flame,
       label: "Streak",
       value: streak,
-      suffix: "🔥",
+      suffix: streak >= 7 ? "🔥 2x" : "🔥",
       color: "text-accent",
       glow: "text-glow-accent",
     },
@@ -101,6 +113,28 @@ const UserStats = ({ ethBalance, bloomBalance, totalBets, wins, streak }: UserSt
             </span>
           </motion.div>
         ))}
+
+        {/* Relative Performance - Only show if we have data */}
+        {percentile > 0 && (
+          <motion.div
+            className="p-4 rounded-xl bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.9 }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/20">
+                <TrendingUp className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Performance</p>
+                <p className="text-lg font-display font-bold text-primary text-glow-primary">
+                  You outperform {percentile}% of players
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
       </div>
 
       {/* Share Stats Button */}

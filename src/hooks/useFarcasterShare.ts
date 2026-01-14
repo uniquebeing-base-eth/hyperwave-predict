@@ -8,12 +8,17 @@ interface ShareWinParams {
   amount: number;
   result: 'up' | 'down';
   payout: number;
+  streak?: number;
+  vaultAmount?: number;
+  multiplier?: number;
 }
 
 interface ShareStatsParams {
   totalPlays: number;
   winRate: number;
   streak: number;
+  vaultAmount?: number;
+  multiplier?: number;
 }
 
 interface ShareLeaderboardParams {
@@ -50,27 +55,73 @@ export const useFarcasterShare = () => {
     }
   };
 
-  const shareWin = async ({ amount, result, payout }: ShareWinParams) => {
+  const shareWin = async ({ amount, result, payout, streak = 0, vaultAmount = 0, multiplier = 1 }: ShareWinParams) => {
     const emoji = result === 'up' ? '📈' : '📉';
-    const text = `${emoji} I just won +${payout.toLocaleString()} $BLOOM on @hyperwave!\n\nPredicted ${result.toUpperCase()} and crushed it! 🏆\n\nThink you can beat me?`;
+    const streakEmoji = streak >= 7 ? '🔥🔥🔥' : streak >= 3 ? '🔥🔥' : streak > 0 ? '🔥' : '';
+    
+    let text = `${emoji} I just won +${payout.toLocaleString()} $BLOOM on @hyperwave!\n\nPredicted ${result.toUpperCase()} and crushed it! 🏆`;
+    
+    // Add vault and streak info
+    if (streak > 0 || vaultAmount > 0) {
+      text += '\n\n';
+      if (streak > 0) {
+        text += `${streakEmoji} ${streak}-day streak`;
+        if (streak < 7) {
+          text += ` • ${7 - streak} days to 2x`;
+        }
+        text += '\n';
+      }
+      if (vaultAmount > 0) {
+        text += `💰 Phase Vault: ${vaultAmount.toLocaleString()} $BLOOM`;
+        if (multiplier > 1) {
+          text += ` (${multiplier}x)`;
+        }
+      }
+    }
+    
+    text += '\n\nThink you can beat me?';
     
     const imageUrl = getShareImageUrl('win', {
       amount,
       prediction: result,
       payout,
+      streak,
+      vault: vaultAmount,
+      multiplier,
     });
     
     await shareToFarcaster(text, imageUrl);
   };
 
-  const shareStats = async ({ totalPlays, winRate, streak }: ShareStatsParams) => {
+  const shareStats = async ({ totalPlays, winRate, streak, vaultAmount = 0, multiplier = 1 }: ShareStatsParams) => {
     const streakEmoji = streak >= 7 ? '🔥🔥🔥' : streak >= 3 ? '🔥🔥' : streak > 0 ? '🔥' : '';
-    const text = `⚡ Check out my HyperWave stats!\n\n🎮 ${totalPlays} plays\n🏆 ${winRate}% win rate\n${streak > 0 ? `${streakEmoji} ${streak} day streak` : ''}\n\nThink you can beat me? 👇`;
+    
+    let text = `⚡ Check out my HyperWave stats!\n\n🎮 ${totalPlays} plays\n🏆 ${winRate}% win rate`;
+    
+    if (streak > 0) {
+      text += `\n${streakEmoji} ${streak} day streak`;
+      if (streak >= 7) {
+        text += ' • 2x active!';
+      } else {
+        text += ` • ${7 - streak} days to 2x`;
+      }
+    }
+    
+    if (vaultAmount > 0) {
+      text += `\n💰 Phase Vault: ${vaultAmount.toLocaleString()} $BLOOM`;
+      if (multiplier > 1) {
+        text += ` (${multiplier}x)`;
+      }
+    }
+    
+    text += '\n\nThink you can beat me? 👇';
     
     const imageUrl = getShareImageUrl('stats', {
       totalPlays,
       winRate,
       streak,
+      vault: vaultAmount,
+      multiplier,
     });
     
     await shareToFarcaster(text, imageUrl);

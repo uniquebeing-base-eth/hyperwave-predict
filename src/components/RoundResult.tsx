@@ -1,7 +1,6 @@
-
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { TrendingUp, TrendingDown, Minus, Trophy, X, Zap, Share2 } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Trophy, X, Zap, Share2, Vault } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useFarcasterShare } from "@/hooks/useFarcasterShare";
 import { useFarcaster } from "@/contexts/FarcasterContext";
@@ -12,6 +11,8 @@ interface RoundResultProps {
   amount: number;
   isVisible: boolean;
   onClose: () => void;
+  streak?: number;
+  vaultAmount?: number;
 }
 
 const RoundResult = ({
@@ -20,6 +21,8 @@ const RoundResult = ({
   amount,
   isVisible,
   onClose,
+  streak = 0,
+  vaultAmount = 0,
 }: RoundResultProps) => {
   const { shareWin } = useFarcasterShare();
   const { isInMiniApp } = useFarcaster();
@@ -27,20 +30,35 @@ const RoundResult = ({
   // HyperWave: Draw = Loss (no refunds, house keeps funds)
   const isWin = result !== null && result !== "draw" && result === userBet;
   const isLoss = !isWin;
+  const multiplier = streak >= 7 ? 2 : 1;
 
   // For wins, add a 2 second delay before allowing close
   const [canClose, setCanClose] = useState(false);
+  const [showVaultAnimation, setShowVaultAnimation] = useState(false);
   
   useEffect(() => {
-    if (isVisible && isWin) {
-      setCanClose(false);
-      const timer = setTimeout(() => {
+    if (isVisible) {
+      // Show vault animation after a short delay
+      const vaultTimer = setTimeout(() => {
+        setShowVaultAnimation(true);
+      }, 800);
+      
+      if (isWin) {
+        setCanClose(false);
+        const timer = setTimeout(() => {
+          setCanClose(true);
+        }, 2000);
+        return () => {
+          clearTimeout(timer);
+          clearTimeout(vaultTimer);
+        };
+      } else {
+        // For losses, allow immediate close
         setCanClose(true);
-      }, 2000);
-      return () => clearTimeout(timer);
-    } else if (isVisible) {
-      // For losses, allow immediate close
-      setCanClose(true);
+        return () => clearTimeout(vaultTimer);
+      }
+    } else {
+      setShowVaultAnimation(false);
     }
   }, [isVisible, isWin]);
 
@@ -56,6 +74,9 @@ const RoundResult = ({
         amount,
         result,
         payout: amount * 2,
+        streak,
+        vaultAmount: vaultAmount + 1000, // Include the new reward
+        multiplier,
       });
     }
   };
@@ -70,7 +91,7 @@ const RoundResult = ({
           exit={{ opacity: 0 }}
         >
           <motion.div
-            className={`relative p-8 rounded-3xl glass border-2 ${
+            className={`relative p-8 rounded-3xl glass border-2 max-w-sm mx-4 ${
               isWin
                 ? "border-success glow-success"
                 : "border-danger glow-danger"
@@ -182,20 +203,58 @@ const RoundResult = ({
               </motion.div>
             )}
 
-            {/* Reward Earned */}
-            <motion.div
-              className="text-center mt-4 p-2 rounded-lg bg-primary/10 border border-primary/20"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
-            >
-              <p className="text-sm text-primary">
-                +1,000 $BLOOM reward earned! 🎁
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Claim after 7-day streak
-              </p>
-            </motion.div>
+            {/* Phase Vault Reward - Always show with animation */}
+            <AnimatePresence>
+              {showVaultAnimation && (
+                <motion.div
+                  className="mt-4 p-3 rounded-xl bg-accent/10 border border-accent/30"
+                  initial={{ opacity: 0, y: 20, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ type: "spring", damping: 15 }}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <motion.div
+                      animate={{ 
+                        scale: [1, 1.2, 1],
+                        rotate: [0, 10, -10, 0]
+                      }}
+                      transition={{ duration: 0.5, delay: 0.2 }}
+                    >
+                      <Vault className="w-5 h-5 text-accent" />
+                    </motion.div>
+                    <div className="text-center">
+                      <motion.p 
+                        className="text-lg font-display font-bold text-accent"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.3 }}
+                      >
+                        +1,000 $BLOOM
+                      </motion.p>
+                      <p className="text-xs text-muted-foreground">
+                        added to Phase Vault
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Streak info */}
+                  {streak > 0 && (
+                    <motion.div 
+                      className="mt-2 pt-2 border-t border-accent/20 text-center"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.5 }}
+                    >
+                      <p className="text-xs text-muted-foreground">
+                        🔥 {streak} day streak • {multiplier}x multiplier
+                        {streak < 7 && ` • ${7 - streak} days to 2x`}
+                      </p>
+                    </motion.div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Share Button - Only show for wins */}
             {isWin && isInMiniApp && (
