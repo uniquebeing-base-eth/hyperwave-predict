@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import UserStats from "@/components/UserStats";
+import { useRelativePerformance } from "@/hooks/useRelativePerformance";
 
 interface StatsPageProps {
   ethBalance: number;
@@ -10,6 +11,9 @@ interface StatsPageProps {
 }
 
 const StatsPage = ({ ethBalance, bloomBalance, totalBets, wins, streak }: StatsPageProps) => {
+  const { percentile } = useRelativePerformance();
+  const vaultAmount = totalBets * 1000; // Phase vault rewards
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -36,6 +40,8 @@ const StatsPage = ({ ethBalance, bloomBalance, totalBets, wins, streak }: StatsP
         totalBets={totalBets}
         wins={wins}
         streak={streak}
+        percentile={percentile}
+        vaultAmount={vaultAmount}
       />
     </motion.div>
   );
