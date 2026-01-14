@@ -47,7 +47,7 @@ const RoundResult = ({
         setCanClose(false);
         const timer = setTimeout(() => {
           setCanClose(true);
-        }, 2000);
+        }, 3000); // 3 seconds to allow user to share
         return () => {
           clearTimeout(timer);
           clearTimeout(vaultTimer);
