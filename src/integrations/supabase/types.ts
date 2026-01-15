@@ -151,6 +151,27 @@ export type Database = {
         }
         Relationships: []
       }
+      phase_state: {
+        Row: {
+          id: number
+          phase_number: number
+          phase_started_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: number
+          phase_number?: number
+          phase_started_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          phase_number?: number
+          phase_started_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
