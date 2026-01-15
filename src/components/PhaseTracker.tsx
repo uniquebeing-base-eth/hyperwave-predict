@@ -1,4 +1,3 @@
-
 import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { Calendar, Gift, Timer } from "lucide-react";
@@ -17,25 +16,22 @@ const PhaseTracker = ({
   totalRewards,
   tokenSymbol,
 }: PhaseTrackerProps) => {
-  // Phase countdown: treat `daysRemaining` as “days left including today” and count down to
-  // the end of the last remaining day (never shows 24h).
+  // Phase countdown: count down to the end of the phase
   const phaseEndDate = useMemo(() => {
     if (daysRemaining <= 0) return new Date();
 
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
-
-    const endDate = new Date(endOfToday);
-    endDate.setDate(endDate.getDate() + Math.max(daysRemaining - 1, 0));
+    const now = new Date();
+    const endDate = new Date(now.getTime() + daysRemaining * 24 * 60 * 60 * 1000);
     return endDate;
   }, [daysRemaining]);
 
   const { days, hours, minutes, isEnded } = useCountdown(phaseEndDate);
 
-  const progressPercentage = ((7 - daysRemaining) / 7) * 100;
+  const daysCompleted = 7 - daysRemaining;
+  const progressPercentage = (daysCompleted / 7) * 100;
 
   const formatCountdown = () => {
-    if (isEnded) return "ended";
+    if (isEnded) return "Phase Complete!";
     return `${days}d ${hours}h ${minutes}m`;
   };
 
@@ -69,20 +65,25 @@ const PhaseTracker = ({
         </div>
         <motion.p
           className={`text-xl font-display font-bold ${
-            isEnded ? "text-muted-foreground" : "text-accent text-glow-accent"
+            isEnded ? "text-green-400" : "text-accent text-glow-accent"
           }`}
           animate={!isEnded ? { opacity: [1, 0.8, 1] } : {}}
           transition={{ duration: 2, repeat: Infinity }}
         >
           {formatCountdown()}
         </motion.p>
+        {isEnded && (
+          <p className="text-xs text-muted-foreground mt-1">
+            Phase {currentPhase + 1} starting soon...
+          </p>
+        )}
       </div>
 
       {/* Progress Bar */}
       <div className="mb-4">
         <div className="flex justify-between text-xs text-muted-foreground mb-2">
           <span>Progress</span>
-          <span>{7 - daysRemaining}/7 days</span>
+          <span>{daysCompleted}/7 days</span>
         </div>
         <div className="h-2 rounded-full bg-muted overflow-hidden">
           <motion.div
@@ -112,7 +113,7 @@ const PhaseTracker = ({
         <div className="p-3 rounded-lg bg-muted/50">
           <div className="flex items-center gap-2 mb-1">
             <Gift className="w-3 h-3 text-accent" />
-            <span className="text-xs text-muted-foreground">Rewards</span>
+            <span className="text-xs text-muted-foreground">Vault</span>
           </div>
           <span className="text-lg font-display font-bold text-accent text-glow-accent">
             {totalRewards.toLocaleString()}
@@ -120,7 +121,7 @@ const PhaseTracker = ({
         </div>
       </div>
 
-      {/* Claim Info */}
+      {/* Phase End Info */}
       {isEnded && (
         <motion.div
           className="mt-4 p-3 rounded-lg bg-accent/20 border border-accent/30"
@@ -128,7 +129,7 @@ const PhaseTracker = ({
           animate={{ opacity: 1, scale: 1 }}
         >
           <p className="text-sm text-accent text-center font-medium">
-            🎉 Rewards ready to claim!
+            🎉 Phase {currentPhase} complete! Rewards ready!
           </p>
         </motion.div>
       )}
