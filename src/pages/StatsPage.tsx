@@ -1,3 +1,4 @@
+
 import { motion } from "framer-motion";
 import UserStats from "@/components/UserStats";
 import { useRelativePerformance } from "@/hooks/useRelativePerformance";
