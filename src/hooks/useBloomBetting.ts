@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ethers, BrowserProvider, Contract, JsonRpcSigner } from 'ethers';
 import { sdk } from '@farcaster/miniapp-sdk';
