@@ -1,3 +1,4 @@
+
 import { motion } from "framer-motion";
 import { Wallet, Trophy, Target, Flame, Coins, Share2, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
