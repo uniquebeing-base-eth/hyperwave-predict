@@ -1,4 +1,5 @@
 
+
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Trophy, TrendingUp, Medal, Flame, Users, Share2, RefreshCw, Clock } from "lucide-react";
