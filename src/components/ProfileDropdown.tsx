@@ -1,4 +1,5 @@
 
+
 import { motion, AnimatePresence } from "framer-motion";
 import { Wallet, X, Copy, ExternalLink, RefreshCw } from "lucide-react";
 import { useState } from "react";
