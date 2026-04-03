@@ -1,6 +1,6 @@
 
 
-import { Gift, Zap, BarChart3, Trophy } from "lucide-react";
+import { Gift, Zap, BarChart3, Trophy, BookOpen } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { motion } from "framer-motion";
 
@@ -9,6 +9,7 @@ const navItems = [
   { to: "/", icon: Zap, label: "Action" },
   { to: "/leaderboard", icon: Trophy, label: "Leaders" },
   { to: "/stats", icon: BarChart3, label: "Stats" },
+  { to: "/docs", icon: BookOpen, label: "Docs" },
 ];
 
 const BottomNav = () => {

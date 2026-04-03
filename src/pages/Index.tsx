@@ -9,7 +9,9 @@ import ActionPage from "@/pages/ActionPage";
 import RewardsPage from "@/pages/RewardsPage";
 import StatsPage from "@/pages/StatsPage";
 import LeaderboardPage from "@/pages/LeaderboardPage";
+import DocsPage from "@/pages/DocsPage";
 import RoundResult from "@/components/RoundResult";
+import OnboardingTutorial from "@/components/OnboardingTutorial";
 import { useMiniAppPrompt } from "@/hooks/useMiniAppPrompt";
 import { useWagmiBetting } from "@/hooks/useWagmiBetting";
 import { useNeynarBalances } from "@/hooks/useNeynarBalances";
@@ -326,6 +328,7 @@ const Index = () => {
           />
           <Route path="rewards" element={<RewardsPage rewards={rewards} streak={streak} />} />
           <Route path="leaderboard" element={<LeaderboardPage />} />
+          <Route path="docs" element={<DocsPage />} />
           <Route
             path="stats"
             element={
@@ -340,6 +343,8 @@ const Index = () => {
           />
         </Routes>
       </MainLayout>
+
+      <OnboardingTutorial />
 
       {/* Result Modal */}
       <RoundResult
