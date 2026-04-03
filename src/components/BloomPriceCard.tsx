@@ -53,7 +53,13 @@ const BloomPriceCard = () => {
         <>
           <div className="flex items-end gap-2 mb-3">
             <span className="text-2xl font-display font-bold text-foreground">
-              ${data?.priceUsd ? data.priceUsd < 0.01 ? data.priceUsd.toFixed(6) : data.priceUsd.toFixed(4) : "—"}
+              ${data?.priceUsd
+                ? data.priceUsd < 0.0000001
+                  ? data.priceUsd.toExponential(2)
+                  : data.priceUsd < 0.01
+                    ? data.priceUsd.toFixed(Math.max(7, -Math.floor(Math.log10(data.priceUsd)) + 2))
+                    : data.priceUsd.toFixed(4)
+                : "—"}
             </span>
             <span
               className={`flex items-center gap-0.5 text-sm font-semibold ${
