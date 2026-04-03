@@ -344,6 +344,8 @@ const Index = () => {
         </Routes>
       </MainLayout>
 
+      <OnboardingTutorial />
+
       {/* Result Modal */}
       <RoundResult
         result={roundResult}

@@ -9,6 +9,7 @@ const navItems = [
   { to: "/", icon: Zap, label: "Action" },
   { to: "/leaderboard", icon: Trophy, label: "Leaders" },
   { to: "/stats", icon: BarChart3, label: "Stats" },
+  { to: "/docs", icon: BookOpen, label: "Docs" },
 ];
 
 const BottomNav = () => {
