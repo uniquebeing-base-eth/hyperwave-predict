@@ -21,6 +21,13 @@ interface FarcasterProfile {
   pfpUrl: string | null;
 }
 
+interface AppProfile {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+}
+
 interface LeaderboardEntry {
   wallet_address: string;
   total_bets: number;
@@ -32,6 +39,7 @@ interface LeaderboardEntry {
   profit: number;
   rank: number;
   profile?: FarcasterProfile;
+  appProfile?: AppProfile;
 }
 
 type TimeframePeriod = '24h' | '7d' | '30d';
