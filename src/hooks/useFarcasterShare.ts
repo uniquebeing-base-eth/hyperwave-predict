@@ -1,10 +1,21 @@
 
-
 import { sdk } from '@farcaster/miniapp-sdk';
 import { toast } from 'sonner';
 
 const APP_URL = 'https://hyperwavex.xyz';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
+interface SharePnlParams {
+  username: string;
+  result: 'win' | 'loss';
+  amount: number;
+  payout: number;
+  prediction: 'up' | 'down';
+  streak?: number;
+  totalWins?: number;
+  totalBets?: number;
+  winRate?: number;
+}
 
 interface ShareWinParams {
   amount: number;
@@ -40,7 +51,6 @@ const getShareImageUrl = (type: string, params: Record<string, string | number>)
 export const useFarcasterShare = () => {
   const shareToFarcaster = async (text: string, imageUrl?: string) => {
     try {
-      // Include both the image and the mini app link as embeds (max 2 embeds)
       const embeds: [string, string] | [string] = imageUrl 
         ? [imageUrl, APP_URL] 
         : [APP_URL];
@@ -51,10 +61,35 @@ export const useFarcasterShare = () => {
       });
     } catch (error) {
       console.log('Share error:', error);
-      // Fallback to copying text
       navigator.clipboard.writeText(`${text}\n\n${APP_URL}`);
       toast.success('Copied to clipboard!');
     }
+  };
+
+  const sharePnl = async ({ username, result, amount, payout, prediction, streak = 0, totalWins = 0, totalBets = 0, winRate = 0 }: SharePnlParams) => {
+    const isWin = result === 'win';
+    const emoji = isWin ? '🏆' : '📉';
+    const pnlSign = isWin ? '+' : '-';
+    const pnlAmount = isWin ? payout : amount;
+    
+    let text = `${emoji} ${isWin ? 'Won' : 'Lost'} ${pnlSign}${pnlAmount.toLocaleString()} $BLOOM on @hyperwave!\n\n`;
+    text += `📊 ${totalWins}W / ${totalBets - totalWins}L • ${winRate.toFixed(1)}% WR`;
+    if (streak > 0) text += ` • 🔥${streak}`;
+    text += `\n\nThink you can do better?`;
+    
+    const imageUrl = getShareImageUrl('pnl', {
+      username,
+      result,
+      amount,
+      payout,
+      prediction,
+      streak,
+      totalWins,
+      totalBets,
+      winRate: winRate.toFixed(1),
+    });
+    
+    await shareToFarcaster(text, imageUrl);
   };
 
   const shareWin = async ({ amount, result, payout, streak = 0, vaultAmount = 0, multiplier = 1 }: ShareWinParams) => {
@@ -63,21 +98,16 @@ export const useFarcasterShare = () => {
     
     let text = `${emoji} I just won +${payout.toLocaleString()} $BLOOM on @hyperwave!\n\nPredicted ${result.toUpperCase()} and crushed it! 🏆`;
     
-    // Add vault and streak info
     if (streak > 0 || vaultAmount > 0) {
       text += '\n\n';
       if (streak > 0) {
         text += `${streakEmoji} ${streak}-day streak`;
-        if (streak < 7) {
-          text += ` • ${7 - streak} days to 2x`;
-        }
+        if (streak < 7) text += ` • ${7 - streak} days to 2x`;
         text += '\n';
       }
       if (vaultAmount > 0) {
         text += `💰 Phase Vault: ${vaultAmount.toLocaleString()} $BLOOM`;
-        if (multiplier > 1) {
-          text += ` (${multiplier}x)`;
-        }
+        if (multiplier > 1) text += ` (${multiplier}x)`;
       }
     }
     
@@ -102,18 +132,13 @@ export const useFarcasterShare = () => {
     
     if (streak > 0) {
       text += `\n${streakEmoji} ${streak} day streak`;
-      if (streak >= 7) {
-        text += ' • 2x active!';
-      } else {
-        text += ` • ${7 - streak} days to 2x`;
-      }
+      if (streak >= 7) text += ' • 2x active!';
+      else text += ` • ${7 - streak} days to 2x`;
     }
     
     if (vaultAmount > 0) {
       text += `\n💰 Phase Vault: ${vaultAmount.toLocaleString()} $BLOOM`;
-      if (multiplier > 1) {
-        text += ` (${multiplier}x)`;
-      }
+      if (multiplier > 1) text += ` (${multiplier}x)`;
     }
     
     text += '\n\nThink you can beat me? 👇';
@@ -144,6 +169,7 @@ export const useFarcasterShare = () => {
   };
 
   return {
+    sharePnl,
     shareWin,
     shareStats,
     shareLeaderboard,

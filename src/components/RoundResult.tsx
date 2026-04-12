@@ -1,5 +1,4 @@
 
-
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { TrendingUp, TrendingDown, Minus, Trophy, X, Zap, Share2, Vault } from "lucide-react";
@@ -15,6 +14,10 @@ interface RoundResultProps {
   onClose: () => void;
   streak?: number;
   vaultAmount?: number;
+  username?: string;
+  totalWins?: number;
+  totalBets?: number;
+  winRate?: number;
 }
 
 const RoundResult = ({
@@ -25,22 +28,23 @@ const RoundResult = ({
   onClose,
   streak = 0,
   vaultAmount = 0,
+  username = "player",
+  totalWins = 0,
+  totalBets = 0,
+  winRate = 0,
 }: RoundResultProps) => {
-  const { shareWin } = useFarcasterShare();
+  const { sharePnl } = useFarcasterShare();
   const { isInMiniApp } = useFarcaster();
   
-  // HyperWave: Draw = Loss (no refunds, house keeps funds)
   const isWin = result !== null && result !== "draw" && result === userBet;
   const isLoss = !isWin;
   const multiplier = streak >= 7 ? 2 : 1;
 
-  // For wins, add a 2 second delay before allowing close
   const [canClose, setCanClose] = useState(false);
   const [showVaultAnimation, setShowVaultAnimation] = useState(false);
   
   useEffect(() => {
     if (isVisible) {
-      // Show vault animation after a short delay
       const vaultTimer = setTimeout(() => {
         setShowVaultAnimation(true);
       }, 800);
@@ -49,13 +53,12 @@ const RoundResult = ({
         setCanClose(false);
         const timer = setTimeout(() => {
           setCanClose(true);
-        }, 3000); // 3 seconds to allow user to share
+        }, 3000);
         return () => {
           clearTimeout(timer);
           clearTimeout(vaultTimer);
         };
       } else {
-        // For losses, allow immediate close
         setCanClose(true);
         return () => clearTimeout(vaultTimer);
       }
@@ -71,14 +74,17 @@ const RoundResult = ({
   };
 
   const handleShare = async () => {
-    if (result && result !== "draw") {
-      await shareWin({
+    if (result && result !== "draw" && userBet) {
+      await sharePnl({
+        username,
+        result: isWin ? 'win' : 'loss',
         amount,
-        result,
-        payout: amount * 2,
+        payout: isWin ? amount * 2 : amount,
+        prediction: userBet,
         streak,
-        vaultAmount: vaultAmount + 1000, // Include the new reward
-        multiplier,
+        totalWins,
+        totalBets,
+        winRate,
       });
     }
   };
@@ -103,7 +109,6 @@ const RoundResult = ({
             exit={{ scale: 0.5, opacity: 0 }}
             transition={{ type: "spring", damping: 15 }}
           >
-            {/* Close Button - disabled during win delay */}
             <button
               onClick={handleClose}
               disabled={isWin && !canClose}
@@ -116,7 +121,6 @@ const RoundResult = ({
               <X className="w-4 h-4 text-muted-foreground" />
             </button>
 
-            {/* Result Icon */}
             <motion.div
               className="flex justify-center mb-6"
               initial={{ scale: 0 }}
@@ -142,7 +146,6 @@ const RoundResult = ({
               </div>
             </motion.div>
 
-            {/* Result Text */}
             <motion.div
               className="text-center mb-6"
               initial={{ y: 20, opacity: 0 }}
@@ -167,7 +170,6 @@ const RoundResult = ({
               </p>
             </motion.div>
 
-            {/* User Result */}
             {userBet && (
               <motion.div
                 className={`p-4 rounded-xl ${
@@ -205,7 +207,6 @@ const RoundResult = ({
               </motion.div>
             )}
 
-            {/* Phase Vault Reward - Always show with animation */}
             <AnimatePresence>
               {showVaultAnimation && (
                 <motion.div
@@ -240,7 +241,6 @@ const RoundResult = ({
                     </div>
                   </div>
                   
-                  {/* Streak info */}
                   {streak > 0 && (
                     <motion.div 
                       className="mt-2 pt-2 border-t border-accent/20 text-center"
@@ -258,8 +258,8 @@ const RoundResult = ({
               )}
             </AnimatePresence>
 
-            {/* Share Button - Only show for wins */}
-            {isWin && isInMiniApp && (
+            {/* Share PnL Card - Show for BOTH wins and losses */}
+            {isInMiniApp && userBet && result !== "draw" && (
               <motion.div
                 className="mt-4"
                 initial={{ opacity: 0, y: 10 }}
@@ -268,10 +268,14 @@ const RoundResult = ({
               >
                 <Button 
                   onClick={handleShare}
-                  className="w-full bg-[#8B5CF6] hover:bg-[#7C3AED] text-white"
+                  className={`w-full ${
+                    isWin 
+                      ? 'bg-[#8B5CF6] hover:bg-[#7C3AED]' 
+                      : 'bg-muted hover:bg-muted/80 border border-border'
+                  } text-white`}
                 >
                   <Share2 className="w-4 h-4 mr-2" />
-                  Share on Farcaster
+                  {isWin ? 'Share Win on Farcaster' : 'Share on Farcaster'}
                 </Button>
               </motion.div>
             )}

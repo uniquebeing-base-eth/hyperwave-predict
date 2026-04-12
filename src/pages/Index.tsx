@@ -1,5 +1,4 @@
 
-
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import { formatUnits, parseUnits } from "viem";
@@ -17,6 +16,7 @@ import { useWagmiBetting } from "@/hooks/useWagmiBetting";
 import { useNeynarBalances } from "@/hooks/useNeynarBalances";
 import { GamePhase } from "@/components/GameTimer";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
+import { useFarcaster } from "@/contexts/FarcasterContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { BLOOM_BETTING_ABI, BLOOM_BETTING_ADDRESS, Direction } from "@/lib/wagmiConfig";
@@ -32,6 +32,7 @@ interface Bet {
 const Index = () => {
   // Initialize mini app prompt
   useMiniAppPrompt();
+  const { user } = useFarcaster();
 
   // Sound effects
   const { preloadSounds, playWinSound, playLoseSound, playBetSound } = useSoundEffects();
@@ -355,6 +356,10 @@ const Index = () => {
         onClose={() => setShowResult(false)}
         streak={streak}
         vaultAmount={rewards}
+        username={user?.username || "player"}
+        totalWins={wins}
+        totalBets={totalBets}
+        winRate={totalBets > 0 ? (wins / totalBets) * 100 : 0}
       />
     </>
   );

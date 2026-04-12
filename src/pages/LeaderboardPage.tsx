@@ -21,6 +21,13 @@ interface FarcasterProfile {
   pfpUrl: string | null;
 }
 
+interface AppProfile {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+}
+
 interface LeaderboardEntry {
   wallet_address: string;
   total_bets: number;
@@ -32,6 +39,7 @@ interface LeaderboardEntry {
   profit: number;
   rank: number;
   profile?: FarcasterProfile;
+  appProfile?: AppProfile;
 }
 
 type TimeframePeriod = '24h' | '7d' | '30d';
@@ -43,6 +51,7 @@ const LeaderboardPage = () => {
   
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [farcasterProfiles, setFarcasterProfiles] = useState<Map<string, FarcasterProfile>>(new Map());
+  const [appProfiles, setAppProfiles] = useState<Map<string, AppProfile>>(new Map());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [timeframe, setTimeframe] = useState<TimeframePeriod>('24h');
@@ -86,6 +95,23 @@ const LeaderboardPage = () => {
           } catch (err) {
             console.error("Error fetching Farcaster profiles:", err);
           }
+
+          // Also fetch app profiles (username/display_name from profiles table)
+          try {
+            const { data: profilesData } = await supabase
+              .from('profiles')
+              .select('id, username, display_name, avatar_url');
+            
+            if (profilesData) {
+              const profileMap = new Map<string, AppProfile>();
+              for (const p of profilesData) {
+                profileMap.set(p.id.toLowerCase(), p);
+              }
+              setAppProfiles(profileMap);
+            }
+          } catch (err) {
+            console.error("Error fetching app profiles:", err);
+          }
         }
       } else {
         setEntries([]);
@@ -119,8 +145,9 @@ const LeaderboardPage = () => {
         ...entry,
         rank: idx + 1,
         profile: farcasterProfiles.get(entry.wallet_address.toLowerCase()),
+        appProfile: appProfiles.get(entry.wallet_address.toLowerCase()) as AppProfile | undefined,
       }));
-  }, [entries, farcasterProfiles]);
+  }, [entries, farcasterProfiles, appProfiles]);
 
   // Sort by win rate (minimum 5 bets)
   const winRateLeaderboard = useMemo((): LeaderboardEntry[] => {
@@ -131,8 +158,9 @@ const LeaderboardPage = () => {
         ...entry,
         rank: idx + 1,
         profile: farcasterProfiles.get(entry.wallet_address.toLowerCase()),
+        appProfile: appProfiles.get(entry.wallet_address.toLowerCase()) as AppProfile | undefined,
       }));
-  }, [entries, farcasterProfiles]);
+  }, [entries, farcasterProfiles, appProfiles]);
 
   const formatAddress = (addr: string) => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
@@ -221,9 +249,14 @@ const LeaderboardPage = () => {
                         src={entry.profile.pfpUrl} 
                         alt={entry.profile.username || 'Player'} 
                       />
+                    ) : entry.appProfile?.avatar_url ? (
+                      <AvatarImage 
+                        src={entry.appProfile.avatar_url} 
+                        alt={entry.appProfile.username || 'Player'} 
+                      />
                     ) : null}
                     <AvatarFallback className="bg-primary/20 text-primary text-xs">
-                      {entry.wallet_address.slice(2, 4).toUpperCase()}
+                      {(entry.profile?.username || entry.appProfile?.username || entry.wallet_address.slice(2, 4)).slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <div>
@@ -231,12 +264,16 @@ const LeaderboardPage = () => {
                       <p className="font-medium text-sm">
                         {entry.profile.displayName || `@${entry.profile.username}`}
                       </p>
+                    ) : entry.appProfile?.username ? (
+                      <p className="font-medium text-sm">
+                        {entry.appProfile.display_name || `@${entry.appProfile.username}`}
+                      </p>
                     ) : (
                       <p className="font-mono text-sm">{formatAddress(entry.wallet_address)}</p>
                     )}
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      {entry.profile?.username && (
-                        <span className="text-primary/70">@{entry.profile.username}</span>
+                      {(entry.profile?.username || entry.appProfile?.username) && (
+                        <span className="text-primary/70">@{entry.profile?.username || entry.appProfile?.username}</span>
                       )}
                       <span>{entry.total_bets} bets</span>
                       {entry.win_rate > 60 && (
