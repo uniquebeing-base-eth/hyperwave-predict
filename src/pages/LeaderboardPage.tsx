@@ -145,8 +145,9 @@ const LeaderboardPage = () => {
         ...entry,
         rank: idx + 1,
         profile: farcasterProfiles.get(entry.wallet_address.toLowerCase()),
+        appProfile: appProfiles.get(entry.wallet_address.toLowerCase()) as AppProfile | undefined,
       }));
-  }, [entries, farcasterProfiles]);
+  }, [entries, farcasterProfiles, appProfiles]);
 
   // Sort by win rate (minimum 5 bets)
   const winRateLeaderboard = useMemo((): LeaderboardEntry[] => {
@@ -157,8 +158,9 @@ const LeaderboardPage = () => {
         ...entry,
         rank: idx + 1,
         profile: farcasterProfiles.get(entry.wallet_address.toLowerCase()),
+        appProfile: appProfiles.get(entry.wallet_address.toLowerCase()) as AppProfile | undefined,
       }));
-  }, [entries, farcasterProfiles]);
+  }, [entries, farcasterProfiles, appProfiles]);
 
   const formatAddress = (addr: string) => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
