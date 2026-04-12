@@ -51,6 +51,7 @@ const LeaderboardPage = () => {
   
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [farcasterProfiles, setFarcasterProfiles] = useState<Map<string, FarcasterProfile>>(new Map());
+  const [appProfiles, setAppProfiles] = useState<Map<string, AppProfile>>(new Map());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [timeframe, setTimeframe] = useState<TimeframePeriod>('24h');
@@ -93,6 +94,23 @@ const LeaderboardPage = () => {
             }
           } catch (err) {
             console.error("Error fetching Farcaster profiles:", err);
+          }
+
+          // Also fetch app profiles (username/display_name from profiles table)
+          try {
+            const { data: profilesData } = await supabase
+              .from('profiles')
+              .select('id, username, display_name, avatar_url');
+            
+            if (profilesData) {
+              const profileMap = new Map<string, AppProfile>();
+              for (const p of profilesData) {
+                profileMap.set(p.id.toLowerCase(), p);
+              }
+              setAppProfiles(profileMap);
+            }
+          } catch (err) {
+            console.error("Error fetching app profiles:", err);
           }
         }
       } else {
