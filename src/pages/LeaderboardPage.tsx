@@ -249,9 +249,14 @@ const LeaderboardPage = () => {
                         src={entry.profile.pfpUrl} 
                         alt={entry.profile.username || 'Player'} 
                       />
+                    ) : entry.appProfile?.avatar_url ? (
+                      <AvatarImage 
+                        src={entry.appProfile.avatar_url} 
+                        alt={entry.appProfile.username || 'Player'} 
+                      />
                     ) : null}
                     <AvatarFallback className="bg-primary/20 text-primary text-xs">
-                      {entry.wallet_address.slice(2, 4).toUpperCase()}
+                      {(entry.profile?.username || entry.appProfile?.username || entry.wallet_address.slice(2, 4)).slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <div>
@@ -259,12 +264,16 @@ const LeaderboardPage = () => {
                       <p className="font-medium text-sm">
                         {entry.profile.displayName || `@${entry.profile.username}`}
                       </p>
+                    ) : entry.appProfile?.username ? (
+                      <p className="font-medium text-sm">
+                        {entry.appProfile.display_name || `@${entry.appProfile.username}`}
+                      </p>
                     ) : (
                       <p className="font-mono text-sm">{formatAddress(entry.wallet_address)}</p>
                     )}
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      {entry.profile?.username && (
-                        <span className="text-primary/70">@{entry.profile.username}</span>
+                      {(entry.profile?.username || entry.appProfile?.username) && (
+                        <span className="text-primary/70">@{entry.profile?.username || entry.appProfile?.username}</span>
                       )}
                       <span>{entry.total_bets} bets</span>
                       {entry.win_rate > 60 && (
