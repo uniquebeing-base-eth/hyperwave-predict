@@ -1,9 +1,13 @@
-
-
 import { motion } from "framer-motion";
 import PhaseTracker from "@/components/PhaseTracker";
 import RewardsTracker from "@/components/RewardsTracker";
+import { Button } from "@/components/ui/button";
+import { Share2 } from "lucide-react";
 import { usePhaseState } from "@/hooks/usePhaseState";
+import { useBloomRewards } from "@/hooks/useBloomRewards";
+import { useFarcasterShare } from "@/hooks/useFarcasterShare";
+import { useFarcaster } from "@/contexts/FarcasterContext";
+import { useState } from "react";
 import { toast } from "sonner";
 
 interface RewardsPageProps {
@@ -12,18 +16,33 @@ interface RewardsPageProps {
 }
 
 const RewardsPage = ({ rewards, streak = 0 }: RewardsPageProps) => {
-  const { phaseNumber, daysRemaining, daysCompleted } = usePhaseState();
-  
-  // Streak is the user's personal consecutive days played
-  // Phase is global 7-day cycle for all users
-  const canClaim = streak >= 7;
+  const { phaseNumber, daysRemaining } = usePhaseState();
+  const { user } = useFarcaster();
+  const { claim, isClaiming, claimableBloom, claimedBloom } = useBloomRewards();
+  const { shareToFarcaster } = useFarcasterShare();
 
-  const handleClaim = () => {
-    if (canClaim) {
+  const canClaim = streak >= 7 && claimableBloom > 0;
+  const displayRewards = claimableBloom > 0 ? claimableBloom : rewards;
+
+  const [lastClaimed, setLastClaimed] = useState<number>(0);
+
+  const handleClaim = async () => {
+    const result = await claim();
+    if (result.success) {
+      setLastClaimed(result.amount);
       toast.success("Rewards claimed!", {
-        description: `You've claimed ${rewards.toLocaleString()} $BLOOM with 2x multiplier!`,
+        description: `${result.amount.toLocaleString()} $BLOOM sent to your wallet`,
       });
     }
+  };
+
+  const handleShare = async () => {
+    const amount = lastClaimed || claimableBloom;
+    const text =
+      `🌸 Just claimed ${amount.toLocaleString()} $BLOOM rewards on @hyperwave!\n\n` +
+      `🔥 ${streak}-day streak • Phase ${phaseNumber}\n\n` +
+      `Stack your streak, claim your bag.`;
+    await shareToFarcaster(text);
   };
 
   return (
@@ -46,21 +65,32 @@ const RewardsPage = ({ rewards, streak = 0 }: RewardsPageProps) => {
         </p>
       </motion.div>
 
-      {/* Phase Progress - On Top (Global 7-day cycle) */}
       <PhaseTracker
         currentPhase={phaseNumber}
         daysRemaining={daysRemaining}
-        totalRewards={rewards}
+        totalRewards={displayRewards}
         tokenSymbol="BLOOM"
       />
 
-      {/* Claimable Rewards - At Bottom (Personal streak) */}
       <RewardsTracker
-        totalRewards={rewards}
+        totalRewards={displayRewards}
         daysPlayed={streak}
-        canClaim={canClaim}
+        canClaim={canClaim && !isClaiming}
         onClaim={handleClaim}
       />
+
+      {claimedBloom > 0 && (
+        <p className="text-center text-xs text-muted-foreground">
+          Lifetime claimed: {claimedBloom.toLocaleString()} $BLOOM
+        </p>
+      )}
+
+      {lastClaimed > 0 && (
+        <Button variant="neon" size="lg" className="w-full" onClick={handleShare}>
+          <Share2 className="w-4 h-4 mr-2" />
+          Share claim on Farcaster
+        </Button>
+      )}
     </motion.div>
   );
 };
