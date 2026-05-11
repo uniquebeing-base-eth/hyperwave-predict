@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /**
  * @title BloomRewards
@@ -22,7 +21,6 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 contract BloomRewards is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using ECDSA for bytes32;
-    using MessageHashUtils for bytes32;
 
     // ── State ──────────────────────────────────────────────────────────
 
@@ -72,12 +70,14 @@ contract BloomRewards is Ownable, ReentrancyGuard {
     ) external nonReentrant {
         if (usedNonces[msg.sender][nonce]) revert NonceAlreadyUsed();
 
-        // Verify oracle signature
+        // Verify oracle signature (eth_sign style: "\x19Ethereum Signed Message:\n32" prefix)
         bytes32 messageHash = keccak256(
             abi.encodePacked(msg.sender, cumulativeAmount, nonce, block.chainid, address(this))
         );
-        bytes32 ethSignedHash = messageHash.toEthSignedMessageHash();
-        address recovered = ethSignedHash.recover(signature);
+        bytes32 ethSignedHash = keccak256(
+            abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash)
+        );
+        address recovered = ECDSA.recover(ethSignedHash, signature);
         if (recovered != oracleSigner) revert InvalidSignature();
 
         // Calculate claimable delta
@@ -89,7 +89,7 @@ contract BloomRewards is Ownable, ReentrancyGuard {
         claimed[msg.sender] = cumulativeAmount;
         usedNonces[msg.sender][nonce] = true;
 
-        // Transfer
+        // Transfer from pre-funded vault
         bloomToken.safeTransfer(msg.sender, payout);
 
         emit Claimed(msg.sender, payout, nonce);
@@ -105,35 +105,27 @@ contract BloomRewards is Ownable, ReentrancyGuard {
 
     // ── Admin Functions ────────────────────────────────────────────────
 
-    /**
-     * @notice Fund the vault with $BLOOM tokens.
-     */
+    /// @notice Fund the vault with $BLOOM tokens.
     function fundVault(uint256 amount) external {
         bloomToken.safeTransferFrom(msg.sender, address(this), amount);
         emit VaultFunded(msg.sender, amount);
     }
 
-    /**
-     * @notice Update the oracle signer address.
-     */
+    /// @notice Update the oracle signer address.
     function setOracleSigner(address _newSigner) external onlyOwner {
         if (_newSigner == address(0)) revert ZeroAddress();
         emit OracleSignerUpdated(oracleSigner, _newSigner);
         oracleSigner = _newSigner;
     }
 
-    /**
-     * @notice Emergency withdraw tokens from the vault.
-     */
+    /// @notice Emergency withdraw tokens from the vault.
     function emergencyWithdraw(address to, uint256 amount) external onlyOwner {
         if (to == address(0)) revert ZeroAddress();
         bloomToken.safeTransfer(to, amount);
         emit VaultWithdrawn(to, amount);
     }
 
-    /**
-     * @notice Get the current vault balance.
-     */
+    /// @notice Get the current vault balance.
     function vaultBalance() external view returns (uint256) {
         return bloomToken.balanceOf(address(this));
     }
