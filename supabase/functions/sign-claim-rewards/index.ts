@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createPublicClient, http, privateKeyToAccount, encodePacked, keccak256 } from "https://esm.sh/viem@2.21.55";
+import { createPublicClient, http, encodePacked, keccak256 } from "https://esm.sh/viem@2.21.55";
 import { base } from "https://esm.sh/viem@2.21.55/chains";
-import { privateKeyToAccount as toAccount } from "https://esm.sh/viem@2.21.55/accounts";
+import { privateKeyToAccount } from "https://esm.sh/viem@2.21.55/accounts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -66,7 +66,7 @@ serve(async (req) => {
 
     const pkRaw = Deno.env.get("ORACLE_PRIVATE_KEY")!;
     const pk = (pkRaw.startsWith("0x") ? pkRaw : `0x${pkRaw}`) as `0x${string}`;
-    const account = toAccount(pk);
+    const account = privateKeyToAccount(pk);
 
     const client = createPublicClient({ chain: base, transport: http() });
 

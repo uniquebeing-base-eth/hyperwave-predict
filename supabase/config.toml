@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.advance-phase]
 verify_jwt = false
+
+[functions.sign-claim-rewards]
+verify_jwt = false
