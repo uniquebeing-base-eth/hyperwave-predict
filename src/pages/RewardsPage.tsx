@@ -81,6 +81,12 @@ const RewardsPage = ({ rewards, streak = 0 }: RewardsPageProps) => {
         onClaim={handleClaim}
       />
 
+      {claimedThisPhase && (
+        <p className="text-center text-xs text-accent">
+          ✓ Claimed for Phase {phaseNumber}. Next claim opens in {daysRemaining}d when this phase ends.
+        </p>
+      )}
+
       {claimedBloom > 0 && (
         <p className="text-center text-xs text-muted-foreground">
           Lifetime claimed: {claimedBloom.toLocaleString()} $BLOOM
