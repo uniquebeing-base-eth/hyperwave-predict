@@ -77,6 +77,7 @@ const RewardsPage = ({ rewards, streak = 0 }: RewardsPageProps) => {
         totalRewards={displayRewards}
         daysPlayed={streak}
         canClaim={canClaim && !isClaiming}
+        multiplierUnlocked={multiplierUnlocked}
         onClaim={handleClaim}
       />
 
