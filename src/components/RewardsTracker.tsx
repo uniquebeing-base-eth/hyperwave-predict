@@ -100,12 +100,12 @@ const RewardsTracker = ({
         </div>
         <div className="h-2.5 rounded-full bg-muted overflow-hidden">
           <motion.div
-            className={`h-full rounded-full ${canClaim ? 'bg-gradient-accent' : 'bg-gradient-primary'}`}
+            className={`h-full rounded-full ${multiplierUnlocked ? 'bg-gradient-accent' : 'bg-gradient-primary'}`}
             initial={{ width: 0 }}
             animate={{ width: `${progressPercentage}%` }}
             transition={{ duration: 1, ease: "easeOut" }}
             style={{
-              boxShadow: canClaim 
+              boxShadow: multiplierUnlocked 
                 ? "0 0 15px hsl(var(--accent) / 0.6)" 
                 : "0 0 10px hsl(var(--primary) / 0.4)",
             }}
