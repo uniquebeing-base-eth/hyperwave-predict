@@ -117,6 +117,7 @@ export function useBloomRewards() {
               }
               resetSendCalls();
               setIsClaiming(false);
+              setClaimedThisPhase(true);
               if (confirmed) {
                 toast({
                   title: "Rewards claimed!",
