@@ -8,6 +8,7 @@ interface RewardsTrackerProps {
   totalRewards: number;
   daysPlayed: number;
   canClaim: boolean;
+  multiplierUnlocked?: boolean;
   onClaim?: () => void;
 }
 
@@ -15,12 +16,13 @@ const RewardsTracker = ({
   totalRewards,
   daysPlayed,
   canClaim,
+  multiplierUnlocked = false,
   onClaim,
 }: RewardsTrackerProps) => {
   const daysRequired = 7;
   const progressPercentage = Math.min((daysPlayed / daysRequired) * 100, 100);
-  const multiplier = canClaim ? 2 : 1;
-  const daysToUnlock = daysRequired - daysPlayed;
+  const multiplier = multiplierUnlocked ? 2 : 1;
+  const daysToUnlock = Math.max(daysRequired - daysPlayed, 0);
 
   return (
     <motion.div
@@ -30,7 +32,7 @@ const RewardsTracker = ({
       transition={{ delay: 0.2 }}
     >
       {/* Glow effect when multiplier unlocked */}
-      {canClaim && (
+      {multiplierUnlocked && (
         <motion.div
           className="absolute inset-0 bg-gradient-to-r from-accent/20 via-primary/20 to-accent/20"
           animate={{ opacity: [0.3, 0.6, 0.3] }}
@@ -52,11 +54,11 @@ const RewardsTracker = ({
         {/* Multiplier Badge */}
         <motion.div
           className={`px-3 py-1.5 rounded-full font-display font-bold text-sm ${
-            canClaim 
+            multiplierUnlocked 
               ? 'bg-gradient-accent text-white shadow-[0_0_15px_hsl(var(--accent)/0.5)]' 
               : 'bg-muted text-muted-foreground'
           }`}
-          animate={canClaim ? { scale: [1, 1.05, 1] } : {}}
+          animate={multiplierUnlocked ? { scale: [1, 1.05, 1] } : {}}
           transition={{ duration: 1.5, repeat: Infinity }}
         >
           {multiplier}x
@@ -67,7 +69,7 @@ const RewardsTracker = ({
       <div className="relative text-center mb-5 py-4 rounded-xl bg-muted/30">
         <motion.p
           className="text-4xl font-display font-bold text-primary text-glow-primary"
-          animate={canClaim ? { scale: [1, 1.02, 1] } : {}}
+          animate={multiplierUnlocked ? { scale: [1, 1.02, 1] } : {}}
           transition={{ duration: 1.5, repeat: Infinity }}
         >
           {totalRewards.toLocaleString()}
@@ -75,7 +77,7 @@ const RewardsTracker = ({
         <p className="text-sm text-muted-foreground mt-1">$BLOOM</p>
         
         {/* Multiplier unlocked message */}
-        {canClaim && (
+        {multiplierUnlocked && (
           <motion.div 
             className="mt-2 flex items-center justify-center gap-1 text-accent"
             initial={{ opacity: 0, y: 5 }}
@@ -98,12 +100,12 @@ const RewardsTracker = ({
         </div>
         <div className="h-2.5 rounded-full bg-muted overflow-hidden">
           <motion.div
-            className={`h-full rounded-full ${canClaim ? 'bg-gradient-accent' : 'bg-gradient-primary'}`}
+            className={`h-full rounded-full ${multiplierUnlocked ? 'bg-gradient-accent' : 'bg-gradient-primary'}`}
             initial={{ width: 0 }}
             animate={{ width: `${progressPercentage}%` }}
             transition={{ duration: 1, ease: "easeOut" }}
             style={{
-              boxShadow: canClaim 
+              boxShadow: multiplierUnlocked 
                 ? "0 0 15px hsl(var(--accent) / 0.6)" 
                 : "0 0 10px hsl(var(--primary) / 0.4)",
             }}
@@ -136,7 +138,7 @@ const RewardsTracker = ({
         </div>
 
         {/* Days to unlock message */}
-        {!canClaim && daysToUnlock > 0 && (
+        {!multiplierUnlocked && daysToUnlock > 0 && (
           <motion.p 
             className="text-center text-xs text-primary mt-3"
             initial={{ opacity: 0 }}
@@ -156,7 +158,7 @@ const RewardsTracker = ({
         disabled={!canClaim}
         onClick={onClaim}
       >
-        {canClaim && (
+        {multiplierUnlocked && (
           <motion.div
             className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
             animate={{ x: ["-100%", "100%"] }}
@@ -164,13 +166,13 @@ const RewardsTracker = ({
           />
         )}
         <span className="relative z-10">
-          {canClaim ? "Claim Rewards" : "Withdraw Anytime"}
+          {multiplierUnlocked ? "Claim 2x Rewards" : "Withdraw Anytime"}
         </span>
       </Button>
 
       {/* Info text */}
       <p className="text-center text-xs text-muted-foreground mt-3">
-        {canClaim 
+        {multiplierUnlocked 
           ? "Congrats! Your 2x multiplier is active." 
           : "Maintain a 7-day streak to double your Phase Vault"
         }
