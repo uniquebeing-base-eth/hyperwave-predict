@@ -54,7 +54,7 @@ const RewardsTracker = ({
         {/* Multiplier Badge */}
         <motion.div
           className={`px-3 py-1.5 rounded-full font-display font-bold text-sm ${
-            canClaim 
+            multiplierUnlocked 
               ? 'bg-gradient-accent text-white shadow-[0_0_15px_hsl(var(--accent)/0.5)]' 
               : 'bg-muted text-muted-foreground'
           }`}
