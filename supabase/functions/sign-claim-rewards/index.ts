@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createPublicClient, http, encodePacked, keccak256 } from "https://esm.sh/viem@2.21.55";
 import { base } from "https://esm.sh/viem@2.21.55/chains";
 import { privateKeyToAccount } from "https://esm.sh/viem@2.21.55/accounts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,9 +11,8 @@ const corsHeaders = {
 
 const BLOOM_REWARDS_ADDRESS = "0xf077988E175f5EeCDa4d7cbab6881Dd148E24152";
 const BLOOM_BETTING_ADDRESS = "0x9cE39DDf290094e9915E2D908b6D99e33167c977";
-const BLOOM_PER_BET = 1000n; // matches UI: rewards = totalBets * 1000
-const DECIMALS = 18n;
-const ONE_BLOOM = 10n ** DECIMALS;
+const BLOOM_PER_BET = 1000n;
+const ONE_BLOOM = 10n ** 18n;
 
 const BETTING_ABI = [
   {
@@ -64,13 +64,43 @@ serve(async (req) => {
       });
     }
 
+    const wallet = (userAddress as string).toLowerCase();
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    // Current phase
+    const { data: phase, error: phaseErr } = await supabase
+      .from("phase_state")
+      .select("phase_number")
+      .eq("id", 1)
+      .single();
+    if (phaseErr || !phase) throw new Error("Failed to read phase state");
+    const phaseNumber = phase.phase_number as number;
+
+    // Already claimed this phase?
+    const { data: existing } = await supabase
+      .from("phase_claims")
+      .select("id")
+      .eq("wallet_address", wallet)
+      .eq("phase_number", phaseNumber)
+      .maybeSingle();
+
+    if (existing) {
+      return new Response(
+        JSON.stringify({ error: "Already claimed this phase. Next claim opens when the phase ends." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const pkRaw = Deno.env.get("ORACLE_PRIVATE_KEY")!;
     const pk = (pkRaw.startsWith("0x") ? pkRaw : `0x${pkRaw}`) as `0x${string}`;
     const account = privateKeyToAccount(pk);
 
     const client = createPublicClient({ chain: base, transport: http() });
 
-    // Compute cumulative entitlement from on-chain stats
     const stats = (await client.readContract({
       address: BLOOM_BETTING_ADDRESS,
       abi: BETTING_ABI,
@@ -78,16 +108,6 @@ serve(async (req) => {
       args: [userAddress as `0x${string}`],
     })) as { totalBets: bigint; currentStreak: bigint };
 
-    const cumulativeAmount = stats.totalBets * BLOOM_PER_BET * ONE_BLOOM;
-
-    if (cumulativeAmount === 0n) {
-      return new Response(JSON.stringify({ error: "Nothing to claim" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Check already claimed
     const alreadyClaimed = (await client.readContract({
       address: BLOOM_REWARDS_ADDRESS,
       abi: REWARDS_ABI,
@@ -95,12 +115,20 @@ serve(async (req) => {
       args: [userAddress as `0x${string}`],
     })) as bigint;
 
-    if (cumulativeAmount <= alreadyClaimed) {
-      return new Response(JSON.stringify({ error: "Nothing new to claim" }), {
+    // Base earnings since last claim (wei)
+    const baseCumulative = stats.totalBets * BLOOM_PER_BET * ONE_BLOOM;
+    if (baseCumulative <= alreadyClaimed) {
+      return new Response(JSON.stringify({ error: "Nothing to claim" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const baseDelta = baseCumulative - alreadyClaimed;
+
+    // Apply 2x multiplier if 7-day streak
+    const multiplier = stats.currentStreak >= 7n ? 2 : 1;
+    const payout = multiplier === 2 ? baseDelta * 2n : baseDelta;
+    const cumulativeAmount = alreadyClaimed + payout;
 
     const nonce = BigInt(Date.now());
     const chainId = BigInt(base.id);
@@ -112,11 +140,27 @@ serve(async (req) => {
       )
     );
 
-    const signature = await account.signMessage({
-      message: { raw: messageHash },
+    const signature = await account.signMessage({ message: { raw: messageHash } });
+
+    // Record claim (locks user out for this phase). If user fails to submit on-chain,
+    // they can re-claim next phase — by design.
+    const { error: insertErr } = await supabase.from("phase_claims").insert({
+      wallet_address: wallet,
+      phase_number: phaseNumber,
+      amount: Number(payout / ONE_BLOOM),
+      multiplier,
+      nonce: nonce.toString(),
     });
 
-    const payout = cumulativeAmount - alreadyClaimed;
+    if (insertErr) {
+      if (insertErr.code === "23505") {
+        return new Response(
+          JSON.stringify({ error: "Already claimed this phase." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      throw insertErr;
+    }
 
     return new Response(
       JSON.stringify({
@@ -124,6 +168,8 @@ serve(async (req) => {
         nonce: nonce.toString(),
         signature,
         payout: payout.toString(),
+        multiplier,
+        phaseNumber,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
