@@ -138,7 +138,7 @@ const RewardsTracker = ({
         </div>
 
         {/* Days to unlock message */}
-        {!canClaim && daysToUnlock > 0 && (
+        {!multiplierUnlocked && daysToUnlock > 0 && (
           <motion.p 
             className="text-center text-xs text-primary mt-3"
             initial={{ opacity: 0 }}
@@ -166,13 +166,13 @@ const RewardsTracker = ({
           />
         )}
         <span className="relative z-10">
-          {canClaim ? "Claim Rewards" : "Withdraw Anytime"}
+          {multiplierUnlocked ? "Claim 2x Rewards" : "Withdraw Anytime"}
         </span>
       </Button>
 
       {/* Info text */}
       <p className="text-center text-xs text-muted-foreground mt-3">
-        {canClaim 
+        {multiplierUnlocked 
           ? "Congrats! Your 2x multiplier is active." 
           : "Maintain a 7-day streak to double your Phase Vault"
         }
