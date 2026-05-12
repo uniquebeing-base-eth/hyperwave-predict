@@ -21,7 +21,8 @@ const RewardsPage = ({ rewards, streak = 0 }: RewardsPageProps) => {
   const { claim, isClaiming, claimableBloom, claimedBloom } = useBloomRewards();
   const { shareToFarcaster } = useFarcasterShare();
 
-  const canClaim = streak >= 7 && claimableBloom > 0;
+  const canClaim = claimableBloom > 0;
+  const multiplierUnlocked = streak >= 7;
   const displayRewards = claimableBloom > 0 ? claimableBloom : rewards;
 
   const [lastClaimed, setLastClaimed] = useState<number>(0);
