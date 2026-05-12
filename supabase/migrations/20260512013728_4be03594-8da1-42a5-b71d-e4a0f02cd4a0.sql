@@ -1,0 +1,1 @@
+UPDATE public.phase_state SET phase_number = 7, phase_started_at = now(), updated_at = now() WHERE id = 1;
