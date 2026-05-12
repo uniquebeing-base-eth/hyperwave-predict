@@ -93,7 +93,7 @@ const RewardsPage = ({ rewards, streak = 0 }: RewardsPageProps) => {
         </p>
       )}
 
-      {lastClaimed > 0 && (
+      {(lastClaimed > 0 || claimedThisPhase) && (
         <Button variant="neon" size="lg" className="w-full" onClick={handleShare}>
           <Share2 className="w-4 h-4 mr-2" />
           Share claim on Farcaster
