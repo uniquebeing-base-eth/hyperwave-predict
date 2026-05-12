@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.sign-claim-rewards]
 verify_jwt = false
+
+[functions.check-oracle-address]
+verify_jwt = false
