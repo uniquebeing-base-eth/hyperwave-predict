@@ -159,13 +159,17 @@ export function useBloomRewards() {
 
   return {
     isClaiming,
-    cumulativeBloom,
+    cumulativeBloom: totalBets * 1000,
     claimedBloom,
     claimableBloom,
+    multiplier,
+    claimedThisPhase,
+    phaseNumber,
     claim,
     refetch: () => {
       refetchStats();
       refetchClaimed();
+      setClaimedThisPhase(false);
     },
   };
 }
