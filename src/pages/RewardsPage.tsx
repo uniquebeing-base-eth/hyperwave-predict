@@ -18,11 +18,11 @@ interface RewardsPageProps {
 const RewardsPage = ({ rewards, streak = 0 }: RewardsPageProps) => {
   const { phaseNumber, daysRemaining } = usePhaseState();
   const { user } = useFarcaster();
-  const { claim, isClaiming, claimableBloom, claimedBloom } = useBloomRewards();
+  const { claim, isClaiming, claimableBloom, claimedBloom, claimedThisPhase, multiplier } = useBloomRewards();
   const { shareToFarcaster } = useFarcasterShare();
 
-  const canClaim = claimableBloom > 0;
-  const multiplierUnlocked = streak >= 7;
+  const multiplierUnlocked = multiplier === 2;
+  const canClaim = claimableBloom > 0 && !claimedThisPhase;
   const displayRewards = claimableBloom > 0 ? claimableBloom : rewards;
 
   const [lastClaimed, setLastClaimed] = useState<number>(0);
@@ -81,13 +81,19 @@ const RewardsPage = ({ rewards, streak = 0 }: RewardsPageProps) => {
         onClaim={handleClaim}
       />
 
+      {claimedThisPhase && (
+        <p className="text-center text-xs text-accent">
+          ✓ Claimed for Phase {phaseNumber}. Next claim opens in {daysRemaining}d when this phase ends.
+        </p>
+      )}
+
       {claimedBloom > 0 && (
         <p className="text-center text-xs text-muted-foreground">
           Lifetime claimed: {claimedBloom.toLocaleString()} $BLOOM
         </p>
       )}
 
-      {lastClaimed > 0 && (
+      {(lastClaimed > 0 || claimedThisPhase) && (
         <Button variant="neon" size="lg" className="w-full" onClick={handleShare}>
           <Share2 className="w-4 h-4 mr-2" />
           Share claim on Farcaster

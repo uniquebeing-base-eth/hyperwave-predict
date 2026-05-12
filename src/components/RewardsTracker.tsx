@@ -166,7 +166,7 @@ const RewardsTracker = ({
           />
         )}
         <span className="relative z-10">
-          {multiplierUnlocked ? "Claim 2x Rewards" : "Withdraw Anytime"}
+          {!canClaim ? "Claim Locked" : multiplierUnlocked ? "Claim 2x Rewards" : "Claim Rewards"}
         </span>
       </Button>
 

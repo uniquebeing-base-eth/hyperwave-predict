@@ -151,6 +151,36 @@ export type Database = {
         }
         Relationships: []
       }
+      phase_claims: {
+        Row: {
+          amount: number
+          claimed_at: string
+          id: string
+          multiplier: number
+          nonce: string
+          phase_number: number
+          wallet_address: string
+        }
+        Insert: {
+          amount: number
+          claimed_at?: string
+          id?: string
+          multiplier?: number
+          nonce: string
+          phase_number: number
+          wallet_address: string
+        }
+        Update: {
+          amount?: number
+          claimed_at?: string
+          id?: string
+          multiplier?: number
+          nonce?: string
+          phase_number?: number
+          wallet_address?: string
+        }
+        Relationships: []
+      }
       phase_state: {
         Row: {
           id: number

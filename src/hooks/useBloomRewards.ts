@@ -1,15 +1,18 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAccount, useReadContract, useSendCalls } from "wagmi";
 import { encodeFunctionData, formatUnits } from "viem";
 import { BLOOM_REWARDS_ADDRESS, BLOOM_REWARDS_ABI } from "@/contracts/BloomRewards";
 import { BLOOM_BETTING_ADDRESS, BLOOM_BETTING_ABI } from "@/lib/wagmiConfig";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { usePhaseState } from "@/hooks/usePhaseState";
 
 export function useBloomRewards() {
   const { address } = useAccount();
   const { sendCalls, reset: resetSendCalls } = useSendCalls();
   const [isClaiming, setIsClaiming] = useState(false);
+  const { phaseNumber } = usePhaseState();
+  const [claimedThisPhase, setClaimedThisPhase] = useState(false);
 
   // On-chain stats drive entitlement
   const { data: statsData, refetch: refetchStats } = useReadContract({
@@ -28,12 +31,38 @@ export function useBloomRewards() {
     query: { enabled: !!address, refetchInterval: 15000 },
   });
 
+  const currentStreak = statsData ? Number(statsData.currentStreak) : 0;
+  const multiplier = currentStreak >= 7 ? 2 : 1;
   const totalBets = statsData ? Number(statsData.totalBets) : 0;
-  const cumulativeBloom = totalBets * 1000; // human units, matches signer
   const claimedBloom = alreadyClaimed
     ? Number(formatUnits(alreadyClaimed as bigint, 18))
     : 0;
-  const claimableBloom = Math.max(cumulativeBloom - claimedBloom, 0);
+  // Base delta in human units, then apply current multiplier for the preview
+  const baseDelta = Math.max(totalBets * 1000 - claimedBloom, 0);
+  const claimableBloom = claimedThisPhase ? 0 : baseDelta * multiplier;
+
+  // Check whether this wallet already claimed this phase
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      if (!address || !phaseNumber) {
+        setClaimedThisPhase(false);
+        return;
+      }
+      const { data } = await supabase
+        .from("phase_claims")
+        .select("id")
+        .eq("wallet_address", address.toLowerCase())
+        .eq("phase_number", phaseNumber)
+        .maybeSingle();
+      if (!cancelled) setClaimedThisPhase(!!data);
+    };
+    check();
+    return () => {
+      cancelled = true;
+    };
+  }, [address, phaseNumber]);
+
 
   const claim = useCallback(async (): Promise<{ success: boolean; amount: number }> => {
     if (!address) {
@@ -88,6 +117,7 @@ export function useBloomRewards() {
               }
               resetSendCalls();
               setIsClaiming(false);
+              setClaimedThisPhase(true);
               if (confirmed) {
                 toast({
                   title: "Rewards claimed!",
@@ -130,13 +160,17 @@ export function useBloomRewards() {
 
   return {
     isClaiming,
-    cumulativeBloom,
+    cumulativeBloom: totalBets * 1000,
     claimedBloom,
     claimableBloom,
+    multiplier,
+    claimedThisPhase,
+    phaseNumber,
     claim,
     refetch: () => {
       refetchStats();
       refetchClaimed();
+      setClaimedThisPhase(false);
     },
   };
 }
