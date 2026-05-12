@@ -18,11 +18,11 @@ interface RewardsPageProps {
 const RewardsPage = ({ rewards, streak = 0 }: RewardsPageProps) => {
   const { phaseNumber, daysRemaining } = usePhaseState();
   const { user } = useFarcaster();
-  const { claim, isClaiming, claimableBloom, claimedBloom } = useBloomRewards();
+  const { claim, isClaiming, claimableBloom, claimedBloom, claimedThisPhase, multiplier } = useBloomRewards();
   const { shareToFarcaster } = useFarcasterShare();
 
-  const canClaim = claimableBloom > 0;
-  const multiplierUnlocked = streak >= 7;
+  const multiplierUnlocked = multiplier === 2;
+  const canClaim = claimableBloom > 0 && !claimedThisPhase;
   const displayRewards = claimableBloom > 0 ? claimableBloom : rewards;
 
   const [lastClaimed, setLastClaimed] = useState<number>(0);
