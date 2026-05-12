@@ -32,7 +32,7 @@ const RewardsTracker = ({
       transition={{ delay: 0.2 }}
     >
       {/* Glow effect when multiplier unlocked */}
-      {canClaim && (
+      {multiplierUnlocked && (
         <motion.div
           className="absolute inset-0 bg-gradient-to-r from-accent/20 via-primary/20 to-accent/20"
           animate={{ opacity: [0.3, 0.6, 0.3] }}
@@ -58,7 +58,7 @@ const RewardsTracker = ({
               ? 'bg-gradient-accent text-white shadow-[0_0_15px_hsl(var(--accent)/0.5)]' 
               : 'bg-muted text-muted-foreground'
           }`}
-          animate={canClaim ? { scale: [1, 1.05, 1] } : {}}
+          animate={multiplierUnlocked ? { scale: [1, 1.05, 1] } : {}}
           transition={{ duration: 1.5, repeat: Infinity }}
         >
           {multiplier}x
@@ -69,7 +69,7 @@ const RewardsTracker = ({
       <div className="relative text-center mb-5 py-4 rounded-xl bg-muted/30">
         <motion.p
           className="text-4xl font-display font-bold text-primary text-glow-primary"
-          animate={canClaim ? { scale: [1, 1.02, 1] } : {}}
+          animate={multiplierUnlocked ? { scale: [1, 1.02, 1] } : {}}
           transition={{ duration: 1.5, repeat: Infinity }}
         >
           {totalRewards.toLocaleString()}
@@ -77,7 +77,7 @@ const RewardsTracker = ({
         <p className="text-sm text-muted-foreground mt-1">$BLOOM</p>
         
         {/* Multiplier unlocked message */}
-        {canClaim && (
+        {multiplierUnlocked && (
           <motion.div 
             className="mt-2 flex items-center justify-center gap-1 text-accent"
             initial={{ opacity: 0, y: 5 }}
@@ -158,7 +158,7 @@ const RewardsTracker = ({
         disabled={!canClaim}
         onClick={onClaim}
       >
-        {canClaim && (
+        {multiplierUnlocked && (
           <motion.div
             className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
             animate={{ x: ["-100%", "100%"] }}
