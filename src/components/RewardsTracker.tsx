@@ -8,6 +8,7 @@ interface RewardsTrackerProps {
   totalRewards: number;
   daysPlayed: number;
   canClaim: boolean;
+  multiplierUnlocked?: boolean;
   onClaim?: () => void;
 }
 
@@ -15,12 +16,13 @@ const RewardsTracker = ({
   totalRewards,
   daysPlayed,
   canClaim,
+  multiplierUnlocked = false,
   onClaim,
 }: RewardsTrackerProps) => {
   const daysRequired = 7;
   const progressPercentage = Math.min((daysPlayed / daysRequired) * 100, 100);
-  const multiplier = canClaim ? 2 : 1;
-  const daysToUnlock = daysRequired - daysPlayed;
+  const multiplier = multiplierUnlocked ? 2 : 1;
+  const daysToUnlock = Math.max(daysRequired - daysPlayed, 0);
 
   return (
     <motion.div
