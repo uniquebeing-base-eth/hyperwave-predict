@@ -133,6 +133,69 @@ const BettingPanel = ({
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.2 }}
     >
+      {/* Asset + Stake Token Selectors */}
+      <div className="mb-5 space-y-3">
+        <div>
+          <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">
+            Predict Asset
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {ASSETS.map((a) => {
+              const active = a.id === asset && a.available;
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  onClick={() => handleAssetSelect(a)}
+                  className={`relative h-10 rounded-lg border text-xs font-display uppercase tracking-wider transition-all ${
+                    active
+                      ? "border-primary bg-primary/10 text-primary"
+                      : a.available
+                      ? "border-border bg-muted/40 text-foreground hover:border-primary/50"
+                      : "border-border/40 bg-muted/20 text-muted-foreground/60"
+                  }`}
+                >
+                  {a.label}
+                  {!a.available && (
+                    <Lock className="w-2.5 h-2.5 absolute top-1 right-1 text-muted-foreground/60" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">
+            Stake With
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {STAKE_TOKENS.map((t) => {
+              const active = t.id === stakeToken && t.available;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => handleTokenSelect(t)}
+                  className={`relative h-10 rounded-lg border text-xs font-display uppercase tracking-wider transition-all ${
+                    active
+                      ? "border-accent bg-accent/10 text-accent"
+                      : t.available
+                      ? "border-border bg-muted/40 text-foreground hover:border-accent/50"
+                      : "border-border/40 bg-muted/20 text-muted-foreground/60"
+                  }`}
+                >
+                  {t.label}
+                  {!t.available && (
+                    <Lock className="w-2.5 h-2.5 absolute top-1 right-1 text-muted-foreground/60" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
       {/* Already bet warning */}
       {hasUserBetThisRound && (
         <motion.div
