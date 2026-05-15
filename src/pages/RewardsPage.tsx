@@ -100,6 +100,8 @@ const RewardsPage = ({ rewards, streak = 0 }: RewardsPageProps) => {
           Share claim on Farcaster
         </Button>
       )}
+
+      <ClaimHistory />
     </motion.div>
   );
 };
