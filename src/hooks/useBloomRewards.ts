@@ -102,7 +102,12 @@ export function useBloomRewards() {
         sendCalls(
           { calls: [{ to: BLOOM_REWARDS_ADDRESS, data: claimData }] },
           {
-            onSuccess: async () => {
+            onSuccess: async (result: any) => {
+              const txHash =
+                result?.receipts?.[0]?.transactionHash ??
+                result?.transactionHash ??
+                result?.id ??
+                null;
               // Poll for claimed update
               let confirmed = false;
               for (let i = 0; i < 20; i++) {
@@ -115,8 +120,24 @@ export function useBloomRewards() {
               }
               resetSendCalls();
               setIsClaiming(false);
-              setClaimedThisPhase(true);
               if (confirmed) {
+                // Only NOW record the claim — prevents canceled/failed txs from locking the user
+                try {
+                  await supabase.functions.invoke("confirm-claim", {
+                    body: {
+                      userAddress: address,
+                      txHash,
+                      expectedClaimed: cumulativeAmount.toString(),
+                      payout: payoutWei.toString(),
+                      nonce: nonce.toString(),
+                      multiplier: data.multiplier,
+                      phaseNumber: data.phaseNumber,
+                    },
+                  });
+                } catch (recordErr) {
+                  console.error("confirm-claim record failed:", recordErr);
+                }
+                setClaimedThisPhase(true);
                 toast({
                   title: "Rewards claimed!",
                   description: `${payoutBloom.toLocaleString()} $BLOOM sent to your wallet`,
@@ -125,7 +146,7 @@ export function useBloomRewards() {
               } else {
                 toast({
                   title: "Claim pending",
-                  description: "Transaction sent — check your wallet shortly.",
+                  description: "Transaction not confirmed yet — try again if it was canceled.",
                 });
                 resolve({ success: false, amount: payoutBloom });
               }
