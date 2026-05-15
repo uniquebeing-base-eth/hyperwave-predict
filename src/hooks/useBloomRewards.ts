@@ -41,27 +41,25 @@ export function useBloomRewards() {
   const baseDelta = Math.max(totalBets * 1000 - claimedBloom, 0);
   const claimableBloom = claimedThisPhase ? 0 : baseDelta * multiplier;
 
-  // Check whether this wallet already claimed this phase
-  useEffect(() => {
-    let cancelled = false;
-    const check = async () => {
-      if (!address || !phaseNumber) {
-        setClaimedThisPhase(false);
-        return;
-      }
-      const { data } = await supabase
-        .from("phase_claims")
-        .select("id")
-        .eq("wallet_address", address.toLowerCase())
-        .eq("phase_number", phaseNumber)
-        .maybeSingle();
-      if (!cancelled) setClaimedThisPhase(!!data);
-    };
-    check();
-    return () => {
-      cancelled = true;
-    };
+  // Check whether this wallet already CONFIRMED a claim this phase
+  const checkClaimedThisPhase = useCallback(async () => {
+    if (!address || !phaseNumber) {
+      setClaimedThisPhase(false);
+      return;
+    }
+    const { data } = await supabase
+      .from("phase_claims")
+      .select("id")
+      .eq("wallet_address", address.toLowerCase())
+      .eq("phase_number", phaseNumber)
+      .not("confirmed_at", "is", null)
+      .maybeSingle();
+    setClaimedThisPhase(!!data);
   }, [address, phaseNumber]);
+
+  useEffect(() => {
+    checkClaimedThisPhase();
+  }, [checkClaimedThisPhase]);
 
 
   const claim = useCallback(async (): Promise<{ success: boolean; amount: number }> => {
