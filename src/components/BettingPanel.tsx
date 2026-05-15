@@ -49,8 +49,30 @@ const BettingPanel = ({
 }: BettingPanelProps) => {
   const [betAmount, setBetAmount] = useState<number>(minimumStake);
   const [selectedDirection, setSelectedDirection] = useState<"up" | "down" | null>(null);
+  const [asset, setAsset] = useState<Asset>("ETH");
+  const [stakeToken, setStakeToken] = useState<StakeToken>("BLOOM");
 
   const presetAmounts = [100000, 250000, 500000, 1000000];
+
+  const handleAssetSelect = (a: typeof ASSETS[number]) => {
+    if (!a.available) {
+      sonnerToast(`${a.label} markets coming soon`, {
+        description: "We're shipping multi-asset predictions in the next contract upgrade.",
+      });
+      return;
+    }
+    setAsset(a.id);
+  };
+
+  const handleTokenSelect = (t: typeof STAKE_TOKENS[number]) => {
+    if (!t.available) {
+      sonnerToast(`${t.label} staking coming soon`, {
+        description: "More stake tokens unlock with the next contract upgrade.",
+      });
+      return;
+    }
+    setStakeToken(t.id);
+  };
 
   const handlePlaceBet = async () => {
     if (!isConnected && onConnect) {
