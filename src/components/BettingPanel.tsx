@@ -3,9 +3,24 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { TrendingUp, TrendingDown, Zap, Loader2, Lock } from "lucide-react";
-import { toast as sonnerToast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
+import { toast as sonnerToast } from "sonner";
+
+type Asset = "ETH" | "BTC" | "SOL";
+type StakeToken = "BLOOM" | "USDC" | "DEGEN";
+
+const ASSETS: { id: Asset; label: string; available: boolean }[] = [
+  { id: "ETH", label: "ETH", available: true },
+  { id: "BTC", label: "BTC", available: false },
+  { id: "SOL", label: "SOL", available: false },
+];
+
+const STAKE_TOKENS: { id: StakeToken; label: string; available: boolean }[] = [
+  { id: "BLOOM", label: "$BLOOM", available: true },
+  { id: "USDC", label: "USDC", available: false },
+  { id: "DEGEN", label: "DEGEN", available: false },
+];
 
 interface BettingPanelProps {
   balance: number;
