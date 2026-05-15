@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import ClaimHistory from "@/components/ClaimHistory";
 import PhaseTracker from "@/components/PhaseTracker";
 import RewardsTracker from "@/components/RewardsTracker";
 import { Button } from "@/components/ui/button";
@@ -99,6 +100,8 @@ const RewardsPage = ({ rewards, streak = 0 }: RewardsPageProps) => {
           Share claim on Farcaster
         </Button>
       )}
+
+      <ClaimHistory />
     </motion.div>
   );
 };

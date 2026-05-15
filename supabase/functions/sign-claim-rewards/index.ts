@@ -80,12 +80,13 @@ serve(async (req) => {
     if (phaseErr || !phase) throw new Error("Failed to read phase state");
     const phaseNumber = phase.phase_number as number;
 
-    // Already claimed this phase?
+    // Already claimed this phase? Only block if a CONFIRMED claim exists.
     const { data: existing } = await supabase
       .from("phase_claims")
-      .select("id")
+      .select("id, confirmed_at")
       .eq("wallet_address", wallet)
       .eq("phase_number", phaseNumber)
+      .not("confirmed_at", "is", null)
       .maybeSingle();
 
     if (existing) {
@@ -142,25 +143,10 @@ serve(async (req) => {
 
     const signature = await account.signMessage({ message: { raw: messageHash } });
 
-    // Record claim (locks user out for this phase). If user fails to submit on-chain,
-    // they can re-claim next phase — by design.
-    const { error: insertErr } = await supabase.from("phase_claims").insert({
-      wallet_address: wallet,
-      phase_number: phaseNumber,
-      amount: Number(payout / ONE_BLOOM),
-      multiplier,
-      nonce: nonce.toString(),
-    });
-
-    if (insertErr) {
-      if (insertErr.code === "23505") {
-        return new Response(
-          JSON.stringify({ error: "Already claimed this phase." }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      throw insertErr;
-    }
+    // NOTE: We deliberately DO NOT insert into phase_claims here.
+    // The claim is only recorded once the on-chain tx is confirmed,
+    // via the `confirm-claim` edge function. This prevents a canceled
+    // or failed transaction from locking the user out of the phase.
 
     return new Response(
       JSON.stringify({

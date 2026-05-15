@@ -155,28 +155,34 @@ export type Database = {
         Row: {
           amount: number
           claimed_at: string
+          confirmed_at: string | null
           id: string
           multiplier: number
           nonce: string
           phase_number: number
+          tx_hash: string | null
           wallet_address: string
         }
         Insert: {
           amount: number
           claimed_at?: string
+          confirmed_at?: string | null
           id?: string
           multiplier?: number
           nonce: string
           phase_number: number
+          tx_hash?: string | null
           wallet_address: string
         }
         Update: {
           amount?: number
           claimed_at?: string
+          confirmed_at?: string | null
           id?: string
           multiplier?: number
           nonce?: string
           phase_number?: number
+          tx_hash?: string | null
           wallet_address?: string
         }
         Relationships: []

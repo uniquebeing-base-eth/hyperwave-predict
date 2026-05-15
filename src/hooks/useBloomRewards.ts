@@ -41,27 +41,25 @@ export function useBloomRewards() {
   const baseDelta = Math.max(totalBets * 1000 - claimedBloom, 0);
   const claimableBloom = claimedThisPhase ? 0 : baseDelta * multiplier;
 
-  // Check whether this wallet already claimed this phase
-  useEffect(() => {
-    let cancelled = false;
-    const check = async () => {
-      if (!address || !phaseNumber) {
-        setClaimedThisPhase(false);
-        return;
-      }
-      const { data } = await supabase
-        .from("phase_claims")
-        .select("id")
-        .eq("wallet_address", address.toLowerCase())
-        .eq("phase_number", phaseNumber)
-        .maybeSingle();
-      if (!cancelled) setClaimedThisPhase(!!data);
-    };
-    check();
-    return () => {
-      cancelled = true;
-    };
+  // Check whether this wallet already CONFIRMED a claim this phase
+  const checkClaimedThisPhase = useCallback(async () => {
+    if (!address || !phaseNumber) {
+      setClaimedThisPhase(false);
+      return;
+    }
+    const { data } = await supabase
+      .from("phase_claims")
+      .select("id")
+      .eq("wallet_address", address.toLowerCase())
+      .eq("phase_number", phaseNumber)
+      .not("confirmed_at", "is", null)
+      .maybeSingle();
+    setClaimedThisPhase(!!data);
   }, [address, phaseNumber]);
+
+  useEffect(() => {
+    checkClaimedThisPhase();
+  }, [checkClaimedThisPhase]);
 
 
   const claim = useCallback(async (): Promise<{ success: boolean; amount: number }> => {
@@ -104,7 +102,12 @@ export function useBloomRewards() {
         sendCalls(
           { calls: [{ to: BLOOM_REWARDS_ADDRESS, data: claimData }] },
           {
-            onSuccess: async () => {
+            onSuccess: async (result: any) => {
+              const txHash =
+                result?.receipts?.[0]?.transactionHash ??
+                result?.transactionHash ??
+                result?.id ??
+                null;
               // Poll for claimed update
               let confirmed = false;
               for (let i = 0; i < 20; i++) {
@@ -117,8 +120,24 @@ export function useBloomRewards() {
               }
               resetSendCalls();
               setIsClaiming(false);
-              setClaimedThisPhase(true);
               if (confirmed) {
+                // Only NOW record the claim — prevents canceled/failed txs from locking the user
+                try {
+                  await supabase.functions.invoke("confirm-claim", {
+                    body: {
+                      userAddress: address,
+                      txHash,
+                      expectedClaimed: cumulativeAmount.toString(),
+                      payout: payoutWei.toString(),
+                      nonce: nonce.toString(),
+                      multiplier: data.multiplier,
+                      phaseNumber: data.phaseNumber,
+                    },
+                  });
+                } catch (recordErr) {
+                  console.error("confirm-claim record failed:", recordErr);
+                }
+                setClaimedThisPhase(true);
                 toast({
                   title: "Rewards claimed!",
                   description: `${payoutBloom.toLocaleString()} $BLOOM sent to your wallet`,
@@ -127,7 +146,7 @@ export function useBloomRewards() {
               } else {
                 toast({
                   title: "Claim pending",
-                  description: "Transaction sent — check your wallet shortly.",
+                  description: "Transaction not confirmed yet — try again if it was canceled.",
                 });
                 resolve({ success: false, amount: payoutBloom });
               }
