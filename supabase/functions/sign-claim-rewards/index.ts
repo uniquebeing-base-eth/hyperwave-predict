@@ -80,12 +80,13 @@ serve(async (req) => {
     if (phaseErr || !phase) throw new Error("Failed to read phase state");
     const phaseNumber = phase.phase_number as number;
 
-    // Already claimed this phase?
+    // Already claimed this phase? Only block if a CONFIRMED claim exists.
     const { data: existing } = await supabase
       .from("phase_claims")
-      .select("id")
+      .select("id, confirmed_at")
       .eq("wallet_address", wallet)
       .eq("phase_number", phaseNumber)
+      .not("confirmed_at", "is", null)
       .maybeSingle();
 
     if (existing) {
