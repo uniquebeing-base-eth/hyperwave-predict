@@ -163,6 +163,11 @@ serve(async (req) => {
       throw insertErr;
     }
 
+    // NOTE: We deliberately DO NOT insert into phase_claims here.
+    // The claim is only recorded once the on-chain tx is confirmed,
+    // via the `confirm-claim` edge function. This prevents a canceled
+    // or failed transaction from locking the user out of the phase.
+
     return new Response(
       JSON.stringify({
         cumulativeAmount: cumulativeAmount.toString(),
