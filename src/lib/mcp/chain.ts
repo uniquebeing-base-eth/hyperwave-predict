@@ -14,6 +14,18 @@ export function publicClient() {
   return createPublicClient({ chain: base, transport: http("https://mainnet.base.org") });
 }
 
+/** Loosely typed contract read (viem's generic inference is too strict for dynamic tool code). */
+export async function readBetting(functionName: string, args: unknown[] = []): Promise<any> {
+  const client = publicClient() as any;
+  const { BLOOM_BETTING_ABI, BLOOM_BETTING_ADDRESS } = await import("@/contracts/BloomBetting");
+  return client.readContract({
+    address: BLOOM_BETTING_ADDRESS,
+    abi: BLOOM_BETTING_ABI,
+    functionName,
+    args,
+  });
+}
+
 export const BLOOM_DECIMALS = 18;
 
 /** Contract prices use 8 decimals. */
