@@ -1,12 +1,5 @@
 import { defineTool } from "@lovable.dev/mcp-js";
-import {
-  BLOOM_BETTING_ABI,
-  BLOOM_BETTING_ADDRESS,
-  directionLabel,
-  formatBloom,
-  formatPrice8,
-  publicClient,
-} from "../chain";
+import { directionLabel, formatBloom, formatPrice8, readBetting } from "../chain";
 
 export default defineTool({
   name: "get_current_round",
@@ -16,50 +9,35 @@ export default defineTool({
   inputSchema: {},
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
   handler: async () => {
-    const client = publicClient();
-    const common = { address: BLOOM_BETTING_ADDRESS, abi: BLOOM_BETTING_ABI } as const;
-
     const [round, timeRemaining, bettingOpen, betCount, minimumStake] = await Promise.all([
-      client.readContract({ ...common, functionName: "getCurrentRound" }),
-      client.readContract({ ...common, functionName: "getTimeRemaining" }),
-      client.readContract({ ...common, functionName: "isBettingOpen" }),
-      client.readContract({ ...common, functionName: "getCurrentRoundBetCount" }),
-      client.readContract({ ...common, functionName: "minimumStake" }),
+      readBetting("getCurrentRound"),
+      readBetting("getTimeRemaining"),
+      readBetting("isBettingOpen"),
+      readBetting("getCurrentRoundBetCount"),
+      readBetting("minimumStake"),
     ]);
 
-    const r = round as {
-      roundId: bigint;
-      startTime: bigint;
-      endTime: bigint;
-      startPrice: bigint;
-      endPrice: bigint;
-      totalUpPool: bigint;
-      totalDownPool: bigint;
-      result: number;
-      resolved: boolean;
-    };
-
-    const upPool = formatBloom(r.totalUpPool);
-    const downPool = formatBloom(r.totalDownPool);
+    const upPool = formatBloom(round.totalUpPool);
+    const downPool = formatBloom(round.totalDownPool);
     const total = upPool + downPool;
 
     const data = {
-      roundId: Number(r.roundId),
+      roundId: Number(round.roundId),
       market: "ETH",
       stakeToken: "BLOOM",
-      startPriceUsd: formatPrice8(r.startPrice),
-      startTime: Number(r.startTime),
-      endTime: Number(r.endTime),
-      secondsRemaining: Number(timeRemaining as bigint),
+      startPriceUsd: formatPrice8(round.startPrice),
+      startTime: Number(round.startTime),
+      endTime: Number(round.endTime),
+      secondsRemaining: Number(timeRemaining),
       bettingOpen: Boolean(bettingOpen),
-      resolved: r.resolved,
-      result: directionLabel(Number(r.result)),
+      resolved: Boolean(round.resolved),
+      result: directionLabel(Number(round.result)),
       upPoolBloom: upPool,
       downPoolBloom: downPool,
       upSharePercent: total > 0 ? Math.round((upPool / total) * 100) : 50,
       downSharePercent: total > 0 ? Math.round((downPool / total) * 100) : 50,
-      betCount: Number(betCount as bigint),
-      minimumStakeBloom: formatBloom(minimumStake as bigint),
+      betCount: Number(betCount),
+      minimumStakeBloom: formatBloom(minimumStake),
       payoutMultiplier: 2,
     };
 
