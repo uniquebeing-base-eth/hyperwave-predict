@@ -148,14 +148,40 @@ const DocsPage = () => {
             </motion.div>
           ))}
 
-          <a
-            href={`https://basescan.org/token/${BLOOM_TOKEN_ADDRESS}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-xs text-primary hover:underline justify-center py-2"
-          >
-            View contract on BaseScan <ExternalLink className="w-3 h-3" />
-          </a>
+          <div className="flex flex-col items-center gap-2 py-2">
+            <a
+              href={APP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-xs text-primary hover:underline"
+            >
+              hyperwavex.xyz <ExternalLink className="w-3 h-3" />
+            </a>
+            <a
+              href={`https://basescan.org/token/${BLOOM_TOKEN_ADDRESS}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-xs text-primary hover:underline"
+            >
+              $BLOOM token on BaseScan <ExternalLink className="w-3 h-3" />
+            </a>
+            <a
+              href={`https://basescan.org/address/${BETTING_CONTRACT}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-xs text-primary hover:underline"
+            >
+              Betting contract on BaseScan <ExternalLink className="w-3 h-3" />
+            </a>
+            <a
+              href={`https://basescan.org/address/${REWARDS_CONTRACT}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-xs text-primary hover:underline"
+            >
+              Rewards contract on BaseScan <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
         </TabsContent>
 
         <TabsContent value="faq" className="mt-3">
