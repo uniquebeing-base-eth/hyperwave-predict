@@ -1,7 +1,7 @@
 import { defineTool } from "@lovable.dev/mcp-js";
 import { z } from "zod";
 import { encodeFunctionData, parseUnits } from "viem";
-import { formatBloom, readBetting } from "../chain";
+import { formatBloom, readBetting, readToken } from "../chain";
 import {
   BLOOM_BETTING_ABI,
   BLOOM_BETTING_ADDRESS,
@@ -37,18 +37,8 @@ export default defineTool({
       readBetting("isBettingOpen"),
       readBetting("getCurrentRound"),
       readBetting("minimumStake"),
-      (await import("../chain")).publicClient().readContract({
-        address: BLOOM_TOKEN_ADDRESS,
-        abi: ERC20_ABI,
-        functionName: "balanceOf",
-        args: [address as `0x${string}`],
-      }) as Promise<bigint>,
-      (await import("../chain")).publicClient().readContract({
-        address: BLOOM_TOKEN_ADDRESS,
-        abi: ERC20_ABI,
-        functionName: "allowance",
-        args: [address as `0x${string}`, BLOOM_BETTING_ADDRESS],
-      }) as Promise<bigint>,
+      readToken("balanceOf", [address]),
+      readToken("allowance", [address, BLOOM_BETTING_ADDRESS]),
     ]);
 
     const roundId = Number(round.roundId);
