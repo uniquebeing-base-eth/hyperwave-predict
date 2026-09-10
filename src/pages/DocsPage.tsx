@@ -113,7 +113,7 @@ const DocsPage = () => {
           Docs & <span className="text-primary text-glow-primary">FAQ</span>
         </h2>
         <p className="text-xs text-muted-foreground">
-          Everything you need to know about Bloom
+          Everything you need to know about HyperWave — live at hyperwavex.xyz
         </p>
       </motion.div>
 
