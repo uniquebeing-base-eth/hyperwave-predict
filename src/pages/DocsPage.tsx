@@ -5,66 +5,94 @@ import BloomPriceCard from "@/components/BloomPriceCard";
 import { ExternalLink, BookOpen, HelpCircle } from "lucide-react";
 
 const BLOOM_TOKEN_ADDRESS = "0xa07e759da6b3d4d75ed76f92fbcb867b9c145b07";
+const BETTING_CONTRACT = "0x9cE39DDf290094e9915E2D908b6D99e33167c977";
+const REWARDS_CONTRACT = "0xf077988E175f5EeCDa4d7cbab6881Dd148E24152";
+const APP_URL = "https://hyperwavex.xyz";
+
+const shortAddr = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 const faqItems = [
   {
-    q: "What is Bloom?",
-    a: "Bloom is an on-chain prediction game built on Base. Players bet whether ETH price will go UP or DOWN each round using $BLOOM tokens. Winners share the prize pool.",
+    q: "What is HyperWave?",
+    a: "HyperWave is an on-chain prediction game on Base, live at hyperwavex.xyz. Players predict whether the ETH price will go UP or DOWN each round using $BLOOM tokens. Winners share the prize pool.",
+  },
+  {
+    q: "Where can I play?",
+    a: "Play in your browser at hyperwavex.xyz, or open HyperWave as a mini app inside Farcaster for instant wallet connection.",
   },
   {
     q: "How do I get $BLOOM tokens?",
-    a: "You can purchase $BLOOM on decentralized exchanges on Base network. Check the token price card above for current DEX links and pricing.",
+    a: "You can buy $BLOOM on decentralized exchanges on Base. Check the token price card above for live pricing and DEX links.",
   },
   {
     q: "How does a round work?",
-    a: "Each round has a betting phase (place your UP/DOWN prediction), followed by a lock phase (no more bets), then resolution when the ETH price is compared to the start price to determine winners.",
+    a: "Each round has a betting window (place your UP/DOWN prediction), then a lock period with no more bets, then resolution when the ETH price is compared to the round's start price.",
   },
   {
     q: "What are Phase Rewards?",
-    a: "Rewards accumulate over 7-day phases. The longer your winning streak, the higher your reward multiplier. You can claim accumulated rewards at any time using the Rewards page.",
+    a: "Rewards build up over 7-day phases. You can claim once per phase. After you claim, your next claim unlocks when the current phase ends.",
+  },
+  {
+    q: "How does the streak multiplier work?",
+    a: "Playing every day of a phase earns a 7-day streak, which doubles your phase payout to 2x. Without a streak you still claim your normal rewards.",
+  },
+  {
+    q: "Why did my claim not register?",
+    a: "A claim is only recorded after the transaction is confirmed on Base. If you cancel or the transaction fails, nothing is locked and you can claim again.",
   },
   {
     q: "How are winnings calculated?",
-    a: "Winners split the losing side's pool proportionally to their bet size. A small house edge is deducted. The more you bet relative to the winning pool, the bigger your share.",
+    a: "Winners split the losing side's pool proportionally to their stake. A small house edge is deducted, so a correct prediction pays up to 2x your stake.",
   },
   {
     q: "Is my wallet safe?",
-    a: "Bloom uses on-chain smart contracts on Base. You interact directly with the contract through your Farcaster wallet — we never have access to your private keys.",
+    a: "Every action runs through public smart contracts on Base and is signed by your own wallet. Your private keys are never shared with us.",
   },
   {
     q: "What happens in a draw?",
-    a: "If the ETH price doesn't change between round start and end, the round is considered a draw and bets are returned to participants.",
+    a: "If the ETH price is unchanged between round start and end, the round is a draw and stakes are returned to participants.",
   },
   {
     q: "How does the leaderboard work?",
-    a: "The leaderboard ranks players by profit, win rate, and bet volume. Filter by daily, weekly, or all-time periods to see where you stand among other players.",
+    a: "The leaderboard ranks players by wins, profit and volume, showing Farcaster usernames and avatars. Filter by daily, weekly or all-time.",
+  },
+  {
+    q: "Can bots or agents play?",
+    a: "Yes. HyperWave exposes a public tool server at hyperwavex.xyz for reading rounds, player records, the leaderboard and prices, and for preparing bet transactions that the agent signs with its own wallet.",
   },
 ];
 
 const docsContent = [
   {
     title: "Getting Started",
-    content:
-      "Open Bloom inside Farcaster to auto-connect your wallet. Make sure you have $BLOOM tokens on Base network. Head to the Action tab to start playing. Place your first bet during the betting window and watch the round resolve in real time.",
+    content: `HyperWave is live at ${APP_URL.replace("https://", "")}. Open it in your browser and connect a Base wallet, or launch it inside Farcaster for automatic wallet connection. Make sure you hold $BLOOM on Base, then head to the Action tab and place your first prediction during the betting window.`,
   },
   {
     title: "Betting Mechanics",
     content:
-      "During the betting phase, choose UP if you think ETH price will rise or DOWN if you think it will fall. Set your $BLOOM stake amount (minimum stake applies). Once the betting window closes, the round locks and no more bets can be placed. After the round timer ends, the on-chain oracle resolves the round based on real ETH price data.",
+      "During the betting window, choose UP if you think ETH will rise or DOWN if you think it will fall, then set your $BLOOM stake (a minimum applies). When the window closes the round locks, and once the timer ends the oracle settles the round against real ETH price data. Correct predictions pay up to 2x.",
   },
   {
     title: "Rewards & Phases",
     content:
-      "The game operates in 7-day phases. Each phase tracks your participation and streak. Maintaining a winning streak increases your reward multiplier. Accumulated rewards can be claimed at any time via the BloomRewards smart contract, which uses backend-signed messages to verify your eligibility.",
+      "The game runs in 7-day phases. Each phase tracks your plays and daily streak. You can claim once per phase; a full 7-day streak doubles your payout to 2x. After claiming, your next claim unlocks when the current phase ends. Claims are signed by the backend and only recorded once confirmed on Base.",
+  },
+  {
+    title: "Claim History & Sharing",
+    content:
+      "The Rewards tab keeps a claim history with the phase number, payout, multiplier, timestamp and a BaseScan link for every confirmed claim. After each claim — and after every round result — you can share a PnL card straight to Farcaster.",
   },
   {
     title: "Smart Contracts",
-    content:
-      "Bloom runs on audited smart contracts deployed on Base. BloomBetting handles round management, bet placement, and payouts. BloomRewards handles phase reward distribution via a pre-funded vault with oracle signature verification. All contract interactions happen through your connected wallet.",
+    content: `HyperWave runs on public contracts on Base. Betting: ${shortAddr(BETTING_CONTRACT)} handles rounds, stakes and payouts. Rewards: ${shortAddr(REWARDS_CONTRACT)} distributes phase rewards from a pre-funded vault with oracle signature verification. Every interaction is signed by your own wallet.`,
   },
   {
     title: "Token Info",
-    content: `$BLOOM is the native token powering the Bloom ecosystem on Base. Contract: ${BLOOM_TOKEN_ADDRESS.slice(0, 6)}…${BLOOM_TOKEN_ADDRESS.slice(-4)}. It's used for betting, rewards, and governance. The token is tradable on Base DEX platforms.`,
+    content: `$BLOOM is the only staking token on HyperWave. Contract: ${shortAddr(BLOOM_TOKEN_ADDRESS)} on Base. It is used for predictions and phase rewards, and is tradable on Base DEX platforms.`,
+  },
+  {
+    title: "For Agents & Developers",
+    content: `Autonomous agents can connect to the public HyperWave tool server at ${APP_URL.replace("https://", "")} to read the live round, past rounds, player stats, the leaderboard and $BLOOM/ETH prices, and to prepare unsigned Base transactions for placing bets. The server never signs transactions or holds funds — the agent's own wallet does.`,
   },
 ];
 
