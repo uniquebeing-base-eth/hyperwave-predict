@@ -26,6 +26,18 @@ export async function readBetting(functionName: string, args: unknown[] = []): P
   });
 }
 
+/** Loosely typed ERC20 read. */
+export async function readToken(functionName: string, args: unknown[] = []): Promise<any> {
+  const client = publicClient() as any;
+  const { BLOOM_TOKEN_ADDRESS, ERC20_ABI } = await import("@/contracts/BloomBetting");
+  return client.readContract({
+    address: BLOOM_TOKEN_ADDRESS,
+    abi: ERC20_ABI,
+    functionName,
+    args,
+  });
+}
+
 export const BLOOM_DECIMALS = 18;
 
 /** Contract prices use 8 decimals. */

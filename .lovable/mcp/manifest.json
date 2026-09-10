@@ -1,0 +1,177 @@
+{
+  "version": 1,
+  "sdk_version": "2.0.4",
+  "path": "/functions/v1/mcp",
+  "auth": {
+    "type": "none"
+  },
+  "mcp": {
+    "server": {
+      "name": "hyperwave-predict",
+      "version": "0.1.0",
+      "title": "HyperWave Predict"
+    },
+    "tools": [
+      {
+        "name": "get_current_round",
+        "title": "Get current round",
+        "description": "Read the live ETH prediction round on Base: round id, start price, seconds remaining, whether betting is still open, the UP/DOWN $BLOOM pools and the number of bets placed.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": true
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_round",
+        "title": "Get a settled round",
+        "description": "Read any past or present round by id, including start price, end price, the settled result (up/down/none) and the final $BLOOM pools.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "roundId": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "The round id to read."
+            }
+          },
+          "required": [
+            "roundId"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_player_stats",
+        "title": "Get player stats",
+        "description": "Read on-chain prediction stats for a wallet: total bets, wins, losses, current streak, best streak, amount staked and total won in $BLOOM. Also reports whether that wallet already bet in the current round.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "address": {
+              "type": "string",
+              "description": "Base wallet address of the player, e.g. 0x1234...abcd."
+            }
+          },
+          "required": [
+            "address"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_leaderboard",
+        "title": "Get leaderboard",
+        "description": "Read the public prediction leaderboard for a period (24h, 7d, 30d or all): wallet, bets, wins, losses, win rate, staked, payout and profit in $BLOOM.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "period": {
+              "type": "string",
+              "enum": [
+                "24h",
+                "7d",
+                "30d",
+                "all"
+              ],
+              "description": "Time window for the ranking."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "description": "How many rows to return (default 10)."
+            }
+          },
+          "required": [
+            "period"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_bloom_market",
+        "title": "Get $BLOOM market data",
+        "description": "Read live $BLOOM market data on Base (price in USD, 24h change, 24h volume, liquidity, market cap) plus the current ETH spot price used for predictions.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": true
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "prepare_bet",
+        "title": "Prepare a prediction transaction",
+        "description": "Build the unsigned Base transaction(s) needed to predict UP or DOWN on the current ETH round with $BLOOM. Returns an optional ERC-20 approval call plus the placeBet call, to be signed and sent by the caller's own wallet. Nothing is signed or submitted here.",
+        "annotations": {
+          "readOnlyHint": true,
+          "openWorldHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "address": {
+              "type": "string",
+              "pattern": "^0x[a-fA-F0-9]{40}$",
+              "description": "The wallet address that will sign and send the transaction."
+            },
+            "direction": {
+              "type": "string",
+              "enum": [
+                "up",
+                "down"
+              ],
+              "description": "Predicted ETH direction for this round."
+            },
+            "amountBloom": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Stake size in whole $BLOOM tokens (not wei)."
+            }
+          },
+          "required": [
+            "address",
+            "direction",
+            "amountBloom"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
